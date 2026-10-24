@@ -56,7 +56,8 @@ def get_customer_balance(customer, company=None):
 
 	try:
 		filters = {"customer": customer, "docstatus": 1, **({"company": company} if company else {})}
-		total = ["sum(outstanding_amount) as total"]
+		# Frappe 16 rejects SQL functions written as strings in fields
+		total = [{"SUM": "outstanding_amount", "as": "total"}]
 
 		# Positive outstanding (what customer owes)
 		total_outstanding = flt(

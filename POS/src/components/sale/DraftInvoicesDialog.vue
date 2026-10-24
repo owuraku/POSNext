@@ -44,9 +44,7 @@
 								<p v-if="draft.customer" class="text-xs text-gray-500 mt-0.5">
 									{{
 										__("Customer: {0}", [
-											draft.customer?.customer_name ||
-												draft.customer?.name ||
-												draft.customer,
+											customerLabel(draft.customer),
 										])
 									}}
 								</p>
@@ -193,6 +191,7 @@
 </template>
 
 <script setup>
+import { customerLabel } from "@/utils/customer";
 import {
 	DEFAULT_CURRENCY,
 	DEFAULT_LOCALE,
@@ -273,7 +272,7 @@ function handlePrintDraft(draft) {
 			payments: [],
 			grand_total: calculateTotal(draft.items),
 			posting_date: draft.created_at,
-			customer_name: draft.customer?.customer_name || draft.customer?.name || draft.customer,
+			customer_name: customerLabel(draft.customer),
 			status: "Draft",
 			header: "Draft",
 			footer: "الفاتورة لم يتم تسجيلها في حسابات الجهة، وبالتالي لا يُعتد بها، ولا تتحمل الجهة أي مسؤولية عن أي أضرار قد تنتج عنها.",

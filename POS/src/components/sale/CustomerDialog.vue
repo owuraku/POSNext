@@ -160,15 +160,10 @@
 							<div class="flex items-start justify-between">
 								<div class="flex-1 min-w-0">
 									<div class="font-semibold text-sm text-gray-900 truncate">
-										{{ customer.customer_name }}
+										{{ customerLabel(customer) }}
 									</div>
-									<div class="text-xs text-gray-600 mt-1 gap-2">
-										<span v-if="customer.mobile_no"
-											>📱 {{ customer.mobile_no }}</span
-										>
-										<span v-if="customer.email_id"
-											>✉️ {{ customer.email_id }}</span
-										>
+									<div v-if="customer.email_id" class="text-xs text-gray-600 mt-1 gap-2">
+										<span>✉️ {{ customer.email_id }}</span>
 									</div>
 									<div
 										v-if="customer.customer_group"
@@ -221,6 +216,7 @@
 </template>
 
 <script setup>
+import { customerLabel } from "@/utils/customer";
 import { useCustomerSearchStore } from "@/stores/customerSearch";
 import { Button, Dialog } from "frappe-ui";
 import { storeToRefs } from "pinia";

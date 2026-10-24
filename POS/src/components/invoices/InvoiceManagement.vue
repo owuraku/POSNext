@@ -811,9 +811,7 @@
 												>
 													{{
 														__("Customer: {0}", [
-															draft.customer?.customer_name ||
-																draft.customer?.name ||
-																draft.customer,
+															customerLabel(draft.customer),
 														])
 													}}
 												</p>
@@ -1024,6 +1022,7 @@
 </template>
 
 <script setup>
+import { customerLabel } from "@/utils/customer";
 import InvoiceFilters from "@/components/invoices/InvoiceFilters.vue";
 import PaymentDialog from "@/components/sale/PaymentDialog.vue";
 import { useInvoiceFilters } from "@/composables/useInvoiceFilters";

@@ -97,13 +97,7 @@
 									<p
 										class="text-xs font-semibold text-gray-900 truncate leading-tight"
 									>
-										{{ customer.customer_name || customer.name }}
-									</p>
-									<p
-										v-if="customer.mobile_no"
-										class="text-[10px] text-gray-500 truncate leading-tight"
-									>
-										{{ customer.mobile_no }}
+										{{ customerLabel(customer) }}
 									</p>
 									<p
 										v-if="customerLpInfo.wallet_enabled"
@@ -423,10 +417,7 @@
 							</div>
 							<div class="flex-1 min-w-0 pointer-events-none">
 								<p class="text-[11px] font-semibold text-gray-900 truncate">
-									{{ cust.customer_name }}
-								</p>
-								<p v-if="cust.mobile_no" class="text-[9px] text-gray-600">
-									{{ cust.mobile_no }}
+									{{ customerLabel(cust) }}
 								</p>
 							</div>
 						</button>
@@ -1522,6 +1513,7 @@
 </template>
 
 <script setup>
+import { customerLabel } from "@/utils/customer";
 /**
  * ============================================================================
  * IMPORTS

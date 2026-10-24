@@ -519,7 +519,7 @@
 								}}</span>
 							</div>
 							<div v-if="customer" class="text-gray-600 text-xs mt-0.5 text-start">
-								{{ customer?.customer_name || customer?.name || customer }}
+								{{ customerLabel(customer) }}
 							</div>
 							<div
 								v-else-if="requiresCustomerForPayment"
@@ -2023,6 +2023,7 @@
 </template>
 
 <script setup>
+import { customerLabel } from "@/utils/customer";
 import { usePOSSettingsStore } from "@/stores/posSettings";
 import {
 	DEFAULT_CURRENCY,
