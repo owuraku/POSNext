@@ -80,6 +80,25 @@
 			</div>
 		</button>
 
+		<!-- Shift Payments -->
+		<button
+			@click="handleMenuClick('payments')"
+			:class="[
+				'w-12 h-12 rounded-lg flex items-center justify-center transition-all relative group',
+				activeMenu === 'payments'
+					? 'bg-emerald-100 text-emerald-600'
+					: 'text-gray-600 hover:bg-gray-100 hover:text-gray-900',
+			]"
+			:title="__('Shift Payments')"
+		>
+			<FeatherIcon name="credit-card" class="w-5 h-5" />
+			<div
+				class="absolute start-full ms-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap z-50"
+			>
+				{{ __("Shift Payments") }}
+			</div>
+		</button>
+
 		<!-- Spacer to push settings to bottom -->
 		<div class="flex-1"></div>
 

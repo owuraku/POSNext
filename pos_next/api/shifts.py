@@ -320,3 +320,151 @@ def get_shift_history(filters=None, limit=25, offset=0, pos_profile=None):
 			"total_cash_diff": flt(totals.get("total_cash_diff", 0)),
 		},
 	}
+
+
+@frappe.whitelist()
+def get_shift_payments(opening_shift):
+	"""Every payment taken in a shift, for the POS's Payments view: cash vs online, per method, and
+	each payment. Cashiers have no Desk access, so this is how they check before closing."""
+	from frappe.query_builder.functions import Coalesce
+	from frappe.utils import get_time
+
+	from pos_next.pos_next.doctype.pos_closing_shift.pos_closing_shift import (
+		_get_cash_mode_of_payment,
+		_mode_types,
+		get_payments_entries,
+	)
+
+	shift = frappe.get_doc("POS Opening Shift", opening_shift)
+	if shift.user != frappe.session.user:
+		frappe.has_permission("POS Opening Shift", "read", shift, throw=True)
+	cash_mode = _get_cash_mode_of_payment(shift.pos_profile)
+
+	si = frappe.qb.DocType("Sales Invoice")
+	sip = frappe.qb.DocType("Sales Invoice Payment")
+	invoices = (
+		frappe.qb.from_(si)
+		.select(
+			si.name,
+			si.posting_date,
+			si.posting_time,
+			si.creation,
+			si.customer,
+			si.customer_name,
+			si.is_return,
+			si.base_change_amount,
+			si.outstanding_amount,
+			si.base_grand_total,
+		)
+		.where((si.docstatus == 1) & (si.posa_pos_opening_shift == opening_shift))
+		.orderby(si.creation, order=frappe.qb.desc)
+		.run(as_dict=True)
+	)
+	names = [inv.name for inv in invoices]
+	rows = []
+	if names:
+		rows = (
+			frappe.qb.from_(sip)
+			.select(sip.parent, sip.mode_of_payment, Coalesce(sip.base_amount, sip.amount).as_("amount"))
+			.where((sip.parenttype == "Sales Invoice") & sip.parent.isin(names) & (sip.amount != 0))
+			.orderby(sip.idx)
+			.run(as_dict=True)
+		)
+	by_invoice = {}
+	for row in rows:
+		by_invoice.setdefault(row.parent, []).append(row)
+
+	entries = get_payments_entries(opening_shift)
+	types = _mode_types([r.mode_of_payment for r in rows] + [e.mode_of_payment for e in entries] + [cash_mode])
+	types[cash_mode] = "Cash"
+
+	def type_of(mode):
+		return types.get(mode) or "General"
+
+	payments = []
+	on_account = 0
+	for inv in invoices:
+		paid = by_invoice.get(inv.name, [])
+		change = flt(inv.base_change_amount)
+		# posting_time is a timedelta: str() gives "9:05:09.5", not "09:05:09"
+		posting_time = get_time(inv.posting_time).strftime("%H:%M:%S") if inv.posting_time else ""
+		if change and not any(row.mode_of_payment == cash_mode for row in paid):
+			# As the closing shift does: change always comes off the cash mode, even with no cash row
+			paid = [*paid, frappe._dict(mode_of_payment=cash_mode, amount=0)]
+		for row in paid:
+			amount = flt(row.amount)
+			# The change handed back comes off the first cash row
+			if change and row.mode_of_payment == cash_mode:
+				amount -= change
+				change = 0
+			payments.append(
+				{
+					"invoice": inv.name,
+					"time": f"{inv.posting_date} {posting_time}".strip(),
+					"creation": str(inv.creation),
+					"customer": inv.customer,
+					"customer_name": inv.customer_name,
+					"mode_of_payment": row.mode_of_payment,
+					"type": type_of(row.mode_of_payment),
+					"amount": flt(amount, 2),
+					"is_return": inv.is_return,
+				}
+			)
+		if not inv.is_return and flt(inv.outstanding_amount) > 0:
+			on_account += flt(inv.outstanding_amount)
+
+	entry_info = (
+		{
+			e.name: e
+			for e in frappe.get_all(
+				"Payment Entry",
+				filters={"name": ["in", [e.name for e in entries]]},
+				fields=["name", "creation", "party_name"],
+			)
+		}
+		if entries
+		else {}
+	)
+	for entry in entries:
+		info = entry_info.get(entry.name) or frappe._dict()
+		payments.append(
+			{
+				"payment_entry": entry.name,
+				"time": str(entry.posting_date),
+				"creation": str(info.creation),
+				"customer": entry.party,
+				"customer_name": info.party_name,
+				"mode_of_payment": entry.mode_of_payment,
+				"type": type_of(entry.mode_of_payment),
+				"amount": flt(entry.base_paid_amount or entry.paid_amount, 2),
+				"is_return": 0,
+			}
+		)
+	payments.sort(key=lambda p: p["creation"], reverse=True)
+
+	by_mode = {}
+	for pay in payments:
+		mode = by_mode.setdefault(
+			pay["mode_of_payment"],
+			{"mode_of_payment": pay["mode_of_payment"], "type": pay["type"], "count": 0, "amount": 0},
+		)
+		mode["count"] += 1
+		mode["amount"] = flt(mode["amount"] + pay["amount"], 2)
+
+	cash = sum(p["amount"] for p in payments if p["type"] == "Cash")
+	online = sum(p["amount"] for p in payments if p["type"] != "Cash")
+	return {
+		"opening_shift": opening_shift,
+		"period_start_date": str(shift.period_start_date),
+		"currency": frappe.get_cached_value("Company", shift.company, "default_currency"),
+		"summary": {
+			"cash": flt(cash, 2),
+			"online": flt(online, 2),
+			"on_account": flt(on_account, 2),
+			"total": flt(cash + online, 2),
+			"count": len(payments),
+			"invoices": len(invoices),
+		},
+		"by_mode": sorted(by_mode.values(), key=lambda m: -abs(m["amount"])),
+		"payments": payments,
+	}

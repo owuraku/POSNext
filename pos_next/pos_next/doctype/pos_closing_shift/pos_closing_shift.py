@@ -400,6 +400,16 @@ def _get_cash_mode_of_payment(pos_profile):
 	return cash_mode or "Cash"
 
 
+def _mode_types(modes):
+	"""Mode of Payment -> its type (Cash, Bank, Phone, General)."""
+	modes = list({m for m in modes if m})
+	if not modes:
+		return {}
+	return dict(
+		frappe.get_all("Mode of Payment", filters={"name": ["in", modes]}, fields=["name", "type"], as_list=True)
+	)
+
+
 def _aggregate_payment(payments, mode_of_payment, amount, opening_amount=0):
 	"""Add or update payment amount for a mode of payment."""
 	for pay in payments:
@@ -679,6 +689,11 @@ def make_closing_shift_from_opening(opening_shift):
 
 	# Build response with display-only fields
 	result = closing_shift.as_dict()
+	# The mode's type (Cash, Bank, Phone…): the closing dialog fills in non-cash amounts from the
+	# recorded payments, so the cashier only counts the drawer
+	mode_types = _mode_types([pay.get("mode_of_payment") for pay in result.get("payment_reconciliation") or []])
+	for pay in result.get("payment_reconciliation") or []:
+		pay["mode_type"] = "Cash" if pay.get("mode_of_payment") == cash_mode else mode_types.get(pay.get("mode_of_payment"))
 	result.update(
 		{
 			"returns_total": summary["returns_total"],
