@@ -1017,6 +1017,7 @@
 		:currency="currency"
 		:is-offline="false"
 		:allow-partial-payment="true"
+		context="outstanding"
 		@payment-completed="handlePaymentCompleted"
 	/>
 </template>

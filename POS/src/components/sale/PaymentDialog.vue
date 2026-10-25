@@ -8,7 +8,9 @@
 	>
 		<template #body-content>
 			<!-- Two Column Layout - auto-sized on mobile, constrained on desktop -->
+			<!-- data-payment-context lets injected scripts (online payments) tell a sale from paying off an invoice -->
 			<div
+				:data-payment-context="context"
 				:class="[
 					'grid grid-cols-1 lg:grid-cols-5 items-stretch',
 					dynamicGap,
@@ -2048,6 +2050,11 @@ const { showWarning, showInfo } = useToast();
 
 const props = defineProps({
 	modelValue: Boolean,
+	// "sale": paying for the cart; "outstanding": paying off an invoice already submitted
+	context: {
+		type: String,
+		default: "sale",
+	},
 	grandTotal: {
 		type: Number,
 		default: 0,

@@ -334,6 +334,7 @@
 		:currency="currency"
 		:is-offline="false"
 		:allow-partial-payment="posSettingsStore.allowPartialPayment"
+		context="outstanding"
 		@payment-completed="handlePaymentCompleted"
 	/>
 </template>
