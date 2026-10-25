@@ -609,6 +609,14 @@
 										<h3 class="text-sm md:text-lg font-semibold text-gray-900">
 											{{ __("Payment Reconciliation") }}
 										</h3>
+										<button
+											v-if="!showSuccessReport"
+											type="button"
+											@click="emit('view-payments')"
+											class="text-xs md:text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+										>
+											{{ __("View payments") }}
+										</button>
 										<span
 											v-if="hideExpectedAmount && showSuccessReport"
 											class="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800"
@@ -693,6 +701,9 @@
 											/>
 										</div>
 									</div>
+									<p v-if="payment._autofilled" class="mt-1.5 text-xs text-blue-600 text-end">
+										{{ __("Filled from recorded payments — check it") }}
+									</p>
 								</div>
 							</div>
 
@@ -875,7 +886,9 @@
 												{{
 													showSuccessReport
 														? __("Final Amount")
-														: __("Count & enter")
+														: payment._autofilled
+															? __("Filled from recorded payments — check it")
+															: __("Count & enter")
 												}}
 											</div>
 										</div>
@@ -1198,7 +1211,7 @@ const props = defineProps({
 	},
 });
 
-const emit = defineEmits(["update:modelValue", "shift-closed"]);
+const emit = defineEmits(["update:modelValue", "shift-closed", "view-payments"]);
 
 const open = computed({
 	get: () => props.modelValue,
@@ -1272,7 +1285,12 @@ async function loadClosingData() {
 			data.payment_reconciliation = data.payment_reconciliation.map((payment) =>
 				reactive({
 					...payment,
-					closing_amount: payment.closing_amount ?? 0,
+					// Non-cash money (mobile money, card, bank) is already recorded by the system, so it is
+					// filled in for the cashier to check; only the cash drawer needs counting
+					closing_amount: isAutoFilled(payment)
+						? Number.parseFloat(payment.expected_amount) || 0
+						: (payment.closing_amount ?? 0),
+					_autofilled: isAutoFilled(payment),
 					difference: 0,
 					_touched: true,
 				})
@@ -1304,7 +1322,14 @@ function calculateDifference(payment) {
 }
 
 // New function to handle closing amount updates with proper reactivity
+function isAutoFilled(payment) {
+	return Boolean(payment.mode_type) && payment.mode_type !== "Cash" && !payment.closing_amount;
+}
+
 function updateClosingAmount(payment, value) {
+	if (payment._autofilled && Number.parseFloat(value) !== Number.parseFloat(payment.closing_amount)) {
+		payment._autofilled = false;
+	}
 	payment.closing_amount = value;
 	payment._touched = true;
 	calculateDifference(payment);

@@ -237,6 +237,26 @@
 				</template>
 				<template #additional-actions>
 					<button
+						v-if="shiftStore.hasOpenShift"
+						@click="showShiftPayments = true"
+						class="w-full text-start px-4 py-2.5 text-sm text-gray-700 hover:bg-emerald-50 flex items-center gap-3 transition-colors"
+					>
+						<svg
+							class="w-5 h-5 text-emerald-600"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"
+							/>
+						</svg>
+						<span>{{ __("Shift Payments") }}</span>
+					</button>
+					<button
 						v-if="canAccessShiftActions"
 						@click="handleCloseShift()"
 						class="w-full text-start px-4 py-2.5 text-sm text-gray-700 hover:bg-orange-50 flex items-center gap-3 transition-colors"
@@ -579,6 +599,14 @@
 				v-model="uiStore.showCloseShiftDialog"
 				:opening-shift="shiftStore.currentShift?.name"
 				@shift-closed="handleShiftClosed"
+				@view-payments="showShiftPayments = true"
+			/>
+
+			<!-- Shift Payments (cashiers check what they took before closing) -->
+			<ShiftPaymentsDialog
+				v-model="showShiftPayments"
+				:opening-shift="shiftStore.currentShift?.name"
+				:currency="shiftStore.profileCurrency"
 			/>
 
 			<!-- Draft Invoices Dialog -->
@@ -1090,6 +1118,7 @@ let _posInitPromise = null;
 
 <script setup>
 import ShiftClosingDialog from "@/components/ShiftClosingDialog.vue";
+import ShiftPaymentsDialog from "@/components/ShiftPaymentsDialog.vue";
 import ShiftOpeningDialog from "@/components/ShiftOpeningDialog.vue";
 import ClearCacheOverlay from "@/components/common/ClearCacheOverlay.vue";
 import SessionLockScreen from "@/components/common/SessionLockScreen.vue";
@@ -1257,6 +1286,7 @@ const showStockLookup = ref(false);
 
 // Invoice Management dialog
 const showInvoiceManagement = ref(false);
+const showShiftPayments = ref(false);
 
 // Invoice Detail dialog
 const showInvoiceDetail = ref(false);
@@ -3141,6 +3171,8 @@ function handleManagementMenuClick(menuItem) {
 		// Load drafts data
 		draftsStore.loadDrafts();
 		showInvoiceManagement.value = true;
+	} else if (menuItem === "payments") {
+		showShiftPayments.value = true;
 	} else if (menuItem === "products") {
 		// Open Stock Lookup dialog in search mode
 		showStockLookup.value = true;
