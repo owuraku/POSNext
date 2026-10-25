@@ -612,7 +612,7 @@
 										<button
 											v-if="!showSuccessReport"
 											type="button"
-											@click="emit('view-payments')"
+											@click="showPayments = true"
 											class="text-xs md:text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
 										>
 											{{ __("View payments") }}
@@ -1118,6 +1118,12 @@
 					</div>
 				</div>
 			</div>
+			<!-- Nested inside this dialog, so Headless UI stacks it: clicks in it don't close this one -->
+			<ShiftPaymentsDialog
+				v-model="showPayments"
+				:opening-shift="openingShift"
+				:currency="shiftStore.companyCurrency"
+			/>
 		</template>
 
 		<template #actions>
@@ -1197,6 +1203,7 @@ import { useToast } from "../composables/useToast";
 import { usePOSSettingsStore } from "../stores/posSettings";
 import { usePOSShiftStore } from "../stores/posShift";
 import { printEODReport } from "../utils/printEod";
+import ShiftPaymentsDialog from "./ShiftPaymentsDialog.vue";
 import TranslatedHTML from "./common/TranslatedHTML.vue";
 
 const props = defineProps({
@@ -1211,7 +1218,7 @@ const props = defineProps({
 	},
 });
 
-const emit = defineEmits(["update:modelValue", "shift-closed", "view-payments"]);
+const emit = defineEmits(["update:modelValue", "shift-closed"]);
 
 const open = computed({
 	get: () => props.modelValue,
@@ -1225,6 +1232,7 @@ const posSettingsStore = usePOSSettingsStore();
 const { hideExpectedAmount } = storeToRefs(posSettingsStore);
 
 const shiftStore = usePOSShiftStore();
+const showPayments = ref(false);
 
 const closingData = ref(null);
 const closingDataResource = getClosingShiftData;

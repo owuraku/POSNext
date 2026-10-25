@@ -599,14 +599,13 @@
 				v-model="uiStore.showCloseShiftDialog"
 				:opening-shift="shiftStore.currentShift?.name"
 				@shift-closed="handleShiftClosed"
-				@view-payments="showShiftPayments = true"
 			/>
 
 			<!-- Shift Payments (cashiers check what they took before closing) -->
 			<ShiftPaymentsDialog
 				v-model="showShiftPayments"
 				:opening-shift="shiftStore.currentShift?.name"
-				:currency="shiftStore.profileCurrency"
+				:currency="shiftStore.companyCurrency"
 			/>
 
 			<!-- Draft Invoices Dialog -->
@@ -711,7 +710,7 @@
 			<ShiftHistoryDialog
 				v-model="showShiftHistoryDialog"
 				:pos-profile="shiftStore.profileName"
-				:currency="shiftStore.profileCurrency"
+				:currency="shiftStore.companyCurrency"
 			/>
 
 			<!-- Offline Invoices Dialog -->
@@ -752,7 +751,7 @@
 				v-model="showProductManagement"
 				:pos-profile="shiftStore.profileName"
 				:company="shiftStore.profileCompany"
-				:currency="shiftStore.profileCurrency"
+				:currency="shiftStore.companyCurrency"
 			/>
 
 			<!-- POS Settings -->

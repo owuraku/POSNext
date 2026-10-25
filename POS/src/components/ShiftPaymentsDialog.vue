@@ -188,6 +188,14 @@ watch(open, (isOpen) => {
 	if (isOpen) load();
 });
 
+// A new shift: don't show the previous shift's payments while loading
+watch(
+	() => props.openingShift,
+	() => {
+		data.value = null;
+	},
+);
+
 const filters = [
 	{ value: "all", label: __("All") },
 	{ value: "cash", label: __("Cash") },
@@ -221,7 +229,7 @@ const cards = computed(() => {
 });
 
 function money(amount) {
-	return formatCurrency(Number(amount) || 0, props.currency || data.value?.currency || undefined);
+	return formatCurrency(Number(amount) || 0, data.value?.currency || props.currency || undefined);
 }
 
 function timeOf(value) {

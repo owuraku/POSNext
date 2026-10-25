@@ -327,6 +327,7 @@ def get_shift_payments(opening_shift):
 	"""Every payment taken in a shift, for the POS's Payments view: cash vs online, per method, and
 	each payment. Cashiers have no Desk access, so this is how they check before closing."""
 	from frappe.query_builder.functions import Coalesce
+	from frappe.utils import get_time
 
 	from pos_next.pos_next.doctype.pos_closing_shift.pos_closing_shift import (
 		_get_cash_mode_of_payment,
@@ -385,6 +386,11 @@ def get_shift_payments(opening_shift):
 	for inv in invoices:
 		paid = by_invoice.get(inv.name, [])
 		change = flt(inv.base_change_amount)
+		# posting_time is a timedelta: str() gives "9:05:09.5", not "09:05:09"
+		posting_time = get_time(inv.posting_time).strftime("%H:%M:%S") if inv.posting_time else ""
+		if change and not any(row.mode_of_payment == cash_mode for row in paid):
+			# As the closing shift does: change always comes off the cash mode, even with no cash row
+			paid = [*paid, frappe._dict(mode_of_payment=cash_mode, amount=0)]
 		for row in paid:
 			amount = flt(row.amount)
 			# The change handed back comes off the first cash row
@@ -394,7 +400,7 @@ def get_shift_payments(opening_shift):
 			payments.append(
 				{
 					"invoice": inv.name,
-					"time": f"{inv.posting_date} {str(inv.posting_time or '')[:8]}".strip(),
+					"time": f"{inv.posting_date} {posting_time}".strip(),
 					"creation": str(inv.creation),
 					"customer": inv.customer,
 					"customer_name": inv.customer_name,
@@ -407,14 +413,27 @@ def get_shift_payments(opening_shift):
 		if not inv.is_return and flt(inv.outstanding_amount) > 0:
 			on_account += flt(inv.outstanding_amount)
 
+	entry_info = (
+		{
+			e.name: e
+			for e in frappe.get_all(
+				"Payment Entry",
+				filters={"name": ["in", [e.name for e in entries]]},
+				fields=["name", "creation", "party_name"],
+			)
+		}
+		if entries
+		else {}
+	)
 	for entry in entries:
+		info = entry_info.get(entry.name) or frappe._dict()
 		payments.append(
 			{
 				"payment_entry": entry.name,
 				"time": str(entry.posting_date),
-				"creation": str(frappe.db.get_value("Payment Entry", entry.name, "creation")),
+				"creation": str(info.creation),
 				"customer": entry.party,
-				"customer_name": frappe.db.get_value("Customer", entry.party, "customer_name") if entry.party else None,
+				"customer_name": info.party_name,
 				"mode_of_payment": entry.mode_of_payment,
 				"type": type_of(entry.mode_of_payment),
 				"amount": flt(entry.base_paid_amount or entry.paid_amount, 2),
