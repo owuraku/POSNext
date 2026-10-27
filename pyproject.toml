@@ -8,8 +8,8 @@ requires-python = ">=3.10"
 readme = "README.md"
 dynamic = ["version"]
 dependencies = [
-    # "frappe~=15.0.0" # Installed and managed by bench.
-    "erpnext",
+    # frappe and erpnext are installed and managed by bench; see [tool.bench.frappe-dependencies]
+    # and required_apps in hooks.py. Listing them here makes pip try to fetch them from PyPI.
     "pypdf>=6.12.0",
 ]
 
