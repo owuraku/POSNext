@@ -90,7 +90,7 @@ export function receiptFooterHTML(invoiceData, scanLabel = "Scan to verify") {
 		? `<div>${qrSVG(url)}<div style="font-size:7px;margin-top:2px;white-space:nowrap">${escapeHTML(scanLabel)}</div></div>`
 		: ""
 	const tagline = showTagline
-		? `<div style="font-size:8px;color:#555;white-space:nowrap;text-align:${
+		? `<div style="font-size:8px;white-space:nowrap;text-align:${
 				showQR ? "right" : "center"
 			}">${escapeHTML(config.tagline)}</div>`
 		: ""
