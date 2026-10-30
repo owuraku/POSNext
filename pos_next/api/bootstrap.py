@@ -71,6 +71,7 @@ def get_initial_data():
 		"pos_profile": None,
 		"pos_settings": None,
 		"payment_methods": [],
+		"receipt_footer": _get_receipt_footer(),
 	}
 
 	# Get open shift - if no shift, return early with defaults
@@ -117,6 +118,19 @@ def get_initial_data():
 # =============================================================================
 # Private Helper Functions
 # =============================================================================
+
+
+def _get_receipt_footer():
+	"""What the receipts built in the browser (sales made offline) carry at their foot, from apps that hook
+	`pos_next_receipt_footer`: {verify_url: link a QR code to "<verify_url>?o=<offline id>", tagline: a line of
+	small print}. Kept by the POS for use offline."""
+	footer = {"verify_url": None, "tagline": None}
+	for method in frappe.get_hooks("pos_next_receipt_footer"):
+		try:
+			footer.update({k: v for k, v in (frappe.get_attr(method)() or {}).items() if k in footer and v})
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "POS Next receipt footer hook failed")
+	return footer
 
 
 def _get_authorization_policy(pos_profile_name):

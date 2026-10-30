@@ -13,6 +13,7 @@
 
 import { call } from "@/utils/apiWrapper";
 import { logger } from "@/utils/logger";
+import { setReceiptFooter } from "@/utils/receiptFooter";
 import { defineStore } from "pinia";
 import { ref } from "vue";
 
@@ -58,6 +59,8 @@ export const useBootstrapStore = defineStore("bootstrap", () => {
 
 			if (result?.success) {
 				data.value = result;
+				// Kept for receipts printed while offline
+				setReceiptFooter(result.receipt_footer);
 				loaded.value = true;
 				log.success("Bootstrap data loaded", {
 					hasShift: !!result.shift,

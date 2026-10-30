@@ -4,6 +4,7 @@ import { getOfflineReceiptPayload } from "@/utils/offline/offlineReceiptCache";
 import { getOfflineInvoiceByOfflineId } from "@/utils/offline/sync";
 import { offlineWorker } from "@/utils/offline/workerClient";
 import { printHTML as qzPrintHTML } from "@/utils/qzTray";
+import { getReceiptFooter, receiptFooterHTML } from "@/utils/receiptFooter";
 
 const log = logger.create("PrintInvoice");
 
@@ -332,11 +333,13 @@ export function buildReceiptHTML(invoiceData) {
 				<div class="footer">
 					<div style="margin-bottom: 5px;">${invoiceData.footer || __("Thank you for your business!")}</div>
 					${
-						invoiceData.footer
+						// An app's own Powered-by line (receipt footer hook) takes the place of POS Next's
+						invoiceData.footer || getReceiptFooter()?.tagline
 							? ""
 							: `<div style="font-size: 10px;">Powered by <a href="https://nexus.brainwise.me" target="_blank" style="color: #3b82f6; text-decoration: none; font-weight: 600;">BrainWise</a></div>`
 					}
 				</div>
+				${receiptFooterHTML(invoiceData, __("Scan to verify"))}
 			</div>`;
 }
 
