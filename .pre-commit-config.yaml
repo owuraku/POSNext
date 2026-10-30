@@ -42,7 +42,8 @@ repos:
                 .*node_modules.*|
                 .*boilerplate.*|
                 pos_next/templates/includes/.*|
-                pos_next/public/js/lib/.*
+                pos_next/public/js/lib/.*|
+                POS/src/utils/vendor/.*
             )$
 
 
@@ -60,7 +61,8 @@ repos:
                 .*node_modules.*|
                 .*boilerplate.*|
                 pos_next/templates/includes/.*|
-                pos_next/public/js/lib/.*
+                pos_next/public/js/lib/.*|
+                POS/src/utils/vendor/.*
             )$
 
 ci:
