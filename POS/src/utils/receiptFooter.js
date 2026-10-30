@@ -9,7 +9,7 @@
  *   with the QR code their server print format carries.
  * - tagline: a line of small print beside the QR code.
  */
-import qrcode from "qrcode-generator"
+import qrcode from "./vendor/qrcode-generator.mjs"
 
 const STORAGE_KEY = "pos_next_receipt_footer"
 // pos_offline_<crypto.randomUUID()>: random, so it can't be guessed from another receipt
