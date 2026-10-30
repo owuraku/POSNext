@@ -165,7 +165,6 @@
 							:placeholder="__('Enter phone number')"
 							class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-start"
 							@input="updateMobileNumber"
-							required
 						/>
 					</div>
 				</div>
@@ -429,7 +428,7 @@ const canSubmitCustomer = computed(
 	() =>
 		hasValidCustomerName.value &&
 		// The mobile number is optional; when one is entered it needs its country code
-		(!phoneNumber.value || Boolean(selectedCountryCode.value)) &&
+		(!phoneNumber.value.trim() || Boolean(selectedCountryCode.value)) &&
 		hasPermission.value
 );
 
@@ -468,7 +467,7 @@ const selectCountry = (country) => {
 const DEFAULT_MOBILE_ISD = "+20";
 
 const updateMobileNumber = () => {
-	if (!phoneNumber.value) {
+	if (!phoneNumber.value.trim()) {
 		customerData.value.mobile_no = "";
 		return;
 	}
