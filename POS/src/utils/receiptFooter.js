@@ -67,8 +67,8 @@ function qrSVG(text) {
 	qr.addData(text)
 	qr.make()
 	return qr
-		.createSvgTag({ cellSize: 2, margin: 1, scalable: true })
-		.replace("<svg ", '<svg style="width:20mm;height:20mm;display:block" ')
+		.createSvgTag({ cellSize: 2, margin: 2, scalable: true })
+		.replace("<svg ", '<svg style="width:14mm;height:14mm;display:block" ')
 }
 
 /**
@@ -87,7 +87,7 @@ export function receiptFooterHTML(invoiceData, scanLabel = "Scan to verify") {
 		? `${config.verify_url}${config.verify_url.includes("?") ? "&" : "?"}o=${encodeURIComponent(offlineId)}`
 		: ""
 	const qr = showQR
-		? `<div>${qrSVG(url)}<div style="font-size:7px;margin-top:2px">${escapeHTML(scanLabel)}</div></div>`
+		? `<div>${qrSVG(url)}<div style="font-size:7px;margin-top:2px;white-space:nowrap">${escapeHTML(scanLabel)}</div></div>`
 		: ""
 	const tagline = showTagline
 		? `<div style="font-size:8px;color:#555;white-space:nowrap;text-align:${
