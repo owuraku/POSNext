@@ -129,6 +129,7 @@ const RECEIPT_STYLES = `
 	.divider { border-top: 1px dashed #000000; margin: 6px 0; }
 	.meta-table, .item-table { width: 100%; border-collapse: collapse; font-size: 11px; }
 	.meta-table td { padding: 1px 0; line-height: 1.2; }
+	.meta-table td:first-child { white-space: nowrap; padding-right: 6px; }
 	.item-table th { border-bottom: 1px solid #000000; padding-bottom: 4px; font-size: 11px; }
 	.item-table td { padding: 5px 0; vertical-align: top; }
 	.item-note { font-size: 10px; color: #444; }
