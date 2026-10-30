@@ -71,12 +71,13 @@ def get_initial_data():
 		"pos_profile": None,
 		"pos_settings": None,
 		"payment_methods": [],
-		"receipt_footer": _get_receipt_footer(),
+		"receipt_footer": None,
 	}
 
 	# Get open shift - if no shift, return early with defaults
 	shift = _get_open_shift()
 	if not shift:
+		result["receipt_footer"] = _get_receipt_footer()
 		return result
 
 	pos_profile = shift["pos_profile_doc"]
@@ -107,6 +108,8 @@ def get_initial_data():
 		"posa_maximum_expense_amount": pos_profile.get("posa_maximum_expense_amount") or 0,
 	}
 
+	# Shop details and the walk-in customer for receipts printed offline, now that the profile is known
+	result["receipt_footer"] = _get_receipt_footer(pos_profile)
 	result["pos_settings"] = _get_pos_settings(pos_profile)
 	result["payment_methods"] = _get_payment_methods(pos_profile_name)
 	result["authorization_policy"] = _get_authorization_policy(pos_profile_name)
@@ -120,14 +123,35 @@ def get_initial_data():
 # =============================================================================
 
 
-def _get_receipt_footer():
-	"""What the receipts built in the browser (sales made offline) carry at their foot, from apps that hook
-	`pos_next_receipt_footer`: {verify_url: link a QR code to "<verify_url>?o=<offline id>", tagline: a line of
-	small print}. Kept by the POS for use offline."""
-	footer = {"verify_url": None, "tagline": None}
+# What apps may set through the pos_next_receipt_footer hook
+RECEIPT_HOOK_KEYS = ("verify_url", "tagline", "shop_name", "shop_phone", "shop_email")
+
+
+def _get_receipt_footer(pos_profile=None):
+	"""What the receipts built in the browser (sales made offline) print, kept by the POS for use offline:
+	the shop's name, phone and email (the profile's company), the cashier, the profile's walk-in customer
+	(no "Billed To" for them), and from apps that hook `pos_next_receipt_footer`: verify_url (a QR code
+	linking to "<verify_url>?o=<offline id>"), tagline (a line of small print) and the shop details."""
+	footer = {key: None for key in RECEIPT_HOOK_KEYS}
+	footer["cashier"] = frappe.utils.get_fullname(frappe.session.user)
+	# Without a profile (no open shift) the POS keeps the shop details and walk-in customer it last had
+	footer["profile_known"] = bool(pos_profile)
+	footer["walk_in_customer"] = pos_profile.customer if pos_profile else None
+	footer["walk_in_customer_name"] = (
+		frappe.db.get_value("Customer", pos_profile.customer, "customer_name")
+		if pos_profile and pos_profile.customer
+		else None
+	)
+	if pos_profile and pos_profile.company:
+		company = frappe.get_cached_value(
+			"Company", pos_profile.company, ["company_name", "phone_no", "email"], as_dict=True
+		)
+		if company:
+			footer.update(shop_name=company.company_name, shop_phone=company.phone_no, shop_email=company.email)
 	for method in frappe.get_hooks("pos_next_receipt_footer"):
 		try:
-			footer.update({k: v for k, v in (frappe.get_attr(method)() or {}).items() if k in footer and v})
+			hooked = frappe.get_attr(method)() or {}
+			footer.update({k: v for k, v in hooked.items() if k in RECEIPT_HOOK_KEYS and v})
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), "POS Next receipt footer hook failed")
 	return footer
