@@ -62,7 +62,7 @@
 				<!-- Mobile Number with Country Code Selector -->
 				<div>
 					<label class="block text-start text-sm font-medium text-gray-700 mb-2">
-						{{ __("Mobile Number") }} <span class="text-red-500">*</span>
+						{{ __("Mobile Number") }}
 					</label>
 					<div class="flex gap-2">
 						<!-- Country Code Dropdown -->
@@ -428,8 +428,8 @@ const hasValidCustomerName = computed(() => {
 const canSubmitCustomer = computed(
 	() =>
 		hasValidCustomerName.value &&
-		Boolean(phoneNumber.value) &&
-		Boolean(selectedCountryCode.value) &&
+		// The mobile number is optional; when one is entered it needs its country code
+		(!phoneNumber.value || Boolean(selectedCountryCode.value)) &&
 		hasPermission.value
 );
 
@@ -847,9 +847,6 @@ const handleCreate = async () => {
 		}
 	} else if (!customerData.value.customer_name) {
 		return showError(__("Customer Name is required"));
-	}
-	if (!phoneNumber.value) {
-		return showError(__("Mobile Number is required"));
 	}
 	if (isEditMode.value) {
 		await updateCustomerResource.submit();
