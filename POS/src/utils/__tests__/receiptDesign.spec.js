@@ -18,7 +18,8 @@ beforeAll(async () => {
 		shop_phone: "0557511479",
 		shop_email: "shop@example.com",
 		cashier: "Kofi Mensah",
-		walk_in_customer: "Walk-in Customer",
+		walk_in_customer: "CUST-0001",
+		walk_in_customer_name: "Walk-in Customer",
 	})
 	;({ buildReceiptHTML } = await import("../printInvoice"))
 })
@@ -39,7 +40,7 @@ const sale = (extra) => ({
 
 describe("buildReceiptHTML", () => {
 	it("prints the shop, cashier and totals, and no Billed To for the walk-in customer", () => {
-		const html = buildReceiptHTML(sale({ customer: "Walk-in Customer" }))
+		const html = buildReceiptHTML(sale({ customer: "CUST-0001" }))
 		expect(html).toContain("Dianjas Fashion")
 		expect(html).toContain("Tel: 0557511479")
 		expect(html).toContain("Kofi Mensah")
@@ -62,6 +63,11 @@ describe("buildReceiptHTML", () => {
 		expect(html).toContain("Ama Mensah")
 		expect(html).toContain("Balance Due")
 		expect(html).not.toContain("TOTAL PAID")
+	})
+
+	it("knows the walk-in customer by name alone, as offline receipts carry it", () => {
+		const html = buildReceiptHTML(sale({ customer_name: "Walk-in Customer" }))
+		expect(html).not.toContain("Billed To")
 	})
 
 	it("escapes names", () => {

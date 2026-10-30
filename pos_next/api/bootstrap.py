@@ -71,12 +71,13 @@ def get_initial_data():
 		"pos_profile": None,
 		"pos_settings": None,
 		"payment_methods": [],
-		"receipt_footer": _get_receipt_footer(),
+		"receipt_footer": None,
 	}
 
 	# Get open shift - if no shift, return early with defaults
 	shift = _get_open_shift()
 	if not shift:
+		result["receipt_footer"] = _get_receipt_footer()
 		return result
 
 	pos_profile = shift["pos_profile_doc"]
@@ -133,7 +134,14 @@ def _get_receipt_footer(pos_profile=None):
 	linking to "<verify_url>?o=<offline id>"), tagline (a line of small print) and the shop details."""
 	footer = {key: None for key in RECEIPT_HOOK_KEYS}
 	footer["cashier"] = frappe.utils.get_fullname(frappe.session.user)
+	# Without a profile (no open shift) the POS keeps the shop details and walk-in customer it last had
+	footer["profile_known"] = bool(pos_profile)
 	footer["walk_in_customer"] = pos_profile.customer if pos_profile else None
+	footer["walk_in_customer_name"] = (
+		frappe.db.get_value("Customer", pos_profile.customer, "customer_name")
+		if pos_profile and pos_profile.customer
+		else None
+	)
 	if pos_profile and pos_profile.company:
 		company = frappe.get_cached_value(
 			"Company", pos_profile.company, ["company_name", "phone_no", "email"], as_dict=True

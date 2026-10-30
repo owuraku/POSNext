@@ -3,8 +3,9 @@
  * Powered-by line): drawn on the receipts the POS builds in the browser, which are the ones printed for
  * sales made offline. Kept in localStorage so it still applies when the POS is offline.
  *
- * Config: { verify_url, tagline, shop_name, shop_phone, shop_email, cashier, walk_in_customer } (any may be
- * null). The shop details, cashier and walk-in customer are for the receipt's header (printInvoice.js).
+ * Config: { verify_url, tagline, shop_name, shop_phone, shop_email, cashier, walk_in_customer,
+ * walk_in_customer_name, profile_known } (any may be null). The shop details, cashier and walk-in customer
+ * are for the receipt's header (printInvoice.js).
  * - verify_url: a QR code linking to `${verify_url}?o=<offline id>`, on receipts of offline sales only.
  *   The server finds the invoice from the offline id once the sale syncs; online invoices are verified
  *   with the QR code their server print format carries.
@@ -17,10 +18,24 @@ const STORAGE_KEY = "pos_next_receipt_footer"
 const OFFLINE_ID =
 	/^pos_offline_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
 
+// From the shift's POS Profile: bootstrap sends them null before a shift is open, when the last known ones are kept
+const PROFILE_KEYS = [
+	"shop_name",
+	"shop_phone",
+	"shop_email",
+	"walk_in_customer",
+	"walk_in_customer_name",
+]
+
 export function setReceiptFooter(config) {
 	try {
 		if (config) {
-			localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
+			const merged = { ...config }
+			if (!config.profile_known) {
+				const previous = getReceiptFooter() || {}
+				for (const key of PROFILE_KEYS) merged[key] = config[key] ?? previous[key] ?? null
+			}
+			localStorage.setItem(STORAGE_KEY, JSON.stringify(merged))
 		} else {
 			localStorage.removeItem(STORAGE_KEY)
 		}
@@ -37,8 +52,8 @@ export function getReceiptFooter() {
 	}
 }
 
-function escapeHTML(text) {
-	return String(text).replace(
+export function escapeHTML(text) {
+	return String(text ?? "").replace(
 		/[&<>"']/g,
 		(c) =>
 			({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[

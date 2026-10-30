@@ -4,7 +4,7 @@ import { getOfflineReceiptPayload } from "@/utils/offline/offlineReceiptCache";
 import { getOfflineInvoiceByOfflineId } from "@/utils/offline/sync";
 import { offlineWorker } from "@/utils/offline/workerClient";
 import { printHTML as qzPrintHTML } from "@/utils/qzTray";
-import { getReceiptFooter, receiptFooterHTML } from "@/utils/receiptFooter";
+import { escapeHTML, getReceiptFooter, receiptFooterHTML } from "@/utils/receiptFooter";
 
 const log = logger.create("PrintInvoice");
 
@@ -70,7 +70,12 @@ function receiptDocFromQueuedInvoice(offlineId, raw) {
 		})),
 		grand_total: grandTotal,
 		total_taxes_and_charges: Number.parseFloat(raw.total_tax) || 0,
-		discount_amount: Number.parseFloat(raw.total_discount) || 0,
+		// total_discount also counts the item discounts, which the item rates already carry
+		discount_amount: Math.max(
+			0,
+			(Number.parseFloat(raw.total_discount) || 0) -
+				items.reduce((sum, item) => sum + (Number.parseFloat(item.discount_amount) || 0), 0),
+		),
 		payments,
 		paid_amount: paidAmount,
 		change_amount: Number.parseFloat(raw.change_amount) || 0,
@@ -139,16 +144,6 @@ const RECEIPT_STYLES = `
 	}
 `
 
-function escapeHTML(value) {
-	return String(value ?? "").replace(
-		/[&<>"']/g,
-		(c) =>
-			({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
-				c
-			],
-	)
-}
-
 /** 1234.5 → "1,234.50", as the print format's "{:,.2f}" */
 function formatAmount(amount) {
 	return (Number.parseFloat(amount) || 0).toLocaleString("en-US", {
@@ -195,17 +190,19 @@ export function buildReceiptHTML(invoiceData) {
 	const payments = (invoiceData.payments || []).filter((p) =>
 		Number.parseFloat(p.amount),
 	)
-	const grandTotal =
-		Number.parseFloat(invoiceData.rounded_total || invoiceData.grand_total) || 0
+	const netTotal = Number.parseFloat(invoiceData.grand_total) || 0
+	const grandTotal = Number.parseFloat(invoiceData.rounded_total) || netTotal
 	const outstanding = Number.parseFloat(invoiceData.outstanding_amount) || 0
 	const change = Number.parseFloat(invoiceData.change_amount) || 0
 	const taxes = Number.parseFloat(invoiceData.total_taxes_and_charges) || 0
 	const discount = Math.abs(Number.parseFloat(invoiceData.discount_amount) || 0)
 	const customer = invoiceData.customer_name || invoiceData.customer
+	// The walk-in customer's id or name (offline receipts may carry only the customer's name)
+	const walkInNames = [shop.walk_in_customer, shop.walk_in_customer_name].filter(Boolean)
 	const walkIn =
 		!customer ||
-		[invoiceData.customer, invoiceData.customer_name].includes(
-			shop.walk_in_customer,
+		[invoiceData.customer, invoiceData.customer_name].some(
+			(c) => c && walkInNames.includes(c),
 		)
 	const salesPersonNames = getSalesPersonNames(invoiceData)
 	const totalQty = items.reduce(
@@ -315,7 +312,7 @@ export function buildReceiptHTML(invoiceData) {
 
 			<table class="meta-table">
 				${row(`<span class="bold">${__("Total Items Purchased")}:</span>`, `<span class="bold">${formatQty(totalQty)}</span>`)}
-				${taxes || discount ? row(`${__("Subtotal")}:`, money(grandTotal - taxes + discount)) : ""}
+				${taxes || discount ? row(`${__("Subtotal")}:`, money(netTotal - taxes + discount)) : ""}
 				${discount ? row(`${__("Discount")}:`, `-${money(discount)}`) : ""}
 				${taxes ? row(`${__("Tax")}:`, money(taxes)) : ""}
 			</table>
