@@ -113,19 +113,19 @@ export async function hydrateLocalOnlyInvoice(invoiceData) {
 
 // The shop's receipt design, the same as Simple Shop's "Default POS Receipt" print format
 const RECEIPT_STYLES = `
-	/* Thermal printers lose thin strokes: a heavy monospace font, bold, and pure black throughout */
+	/* Thermal printers lose thin strokes: a heavy monospace font in pure black; regular weight, key parts bold */
 	body {
 		font-family: Consolas, "Lucida Console", "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace;
 		color: #000000; background: #ffffff; font-size: 12px; margin: 0; padding: 0;
 	}
 	.receipt-container {
 		font-family: Consolas, "Lucida Console", "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace;
-		font-weight: 600; color: #000000;
+		font-weight: normal; color: #000000;
 		width: 72mm; margin: 0 auto; padding: 5px;
 	}
 	.text-center { text-align: center; }
 	.text-right { text-align: right; }
-	.bold { font-weight: 800; }
+	.bold { font-weight: bold; }
 	.receipt-container * { color: #000000 !important; }
 	.shop-title { font-size: 16px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
 	.shop-contact { font-size: 11px; line-height: 1.3; margin-bottom: 8px; }
@@ -133,7 +133,7 @@ const RECEIPT_STYLES = `
 	.meta-table, .item-table { width: 100%; border-collapse: collapse; font-size: 11px; }
 	.meta-table td { padding: 1px 0; line-height: 1.2; }
 	.meta-table td:first-child { white-space: nowrap; padding-right: 6px; }
-	.item-table th { border-bottom: 1px solid #000000; padding-bottom: 4px; font-size: 11px; font-weight: 800; }
+	.item-table th { border-bottom: 1px solid #000000; padding-bottom: 4px; font-size: 11px; font-weight: bold; }
 	.item-table td { padding: 5px 0; vertical-align: top; }
 	/* A gap between the number columns, so a quantity and a rate in the thousands don't read as one figure */
 	.item-table th + th, .item-table td + td { padding-left: 8px; }
