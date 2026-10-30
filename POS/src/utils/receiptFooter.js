@@ -87,10 +87,10 @@ export function receiptFooterHTML(invoiceData, scanLabel = "Scan to verify") {
 		? `${config.verify_url}${config.verify_url.includes("?") ? "&" : "?"}o=${encodeURIComponent(offlineId)}`
 		: ""
 	const qr = showQR
-		? `<div>${qrSVG(url)}<div style="font-size:7px;margin-top:2px;white-space:nowrap">${escapeHTML(scanLabel)}</div></div>`
+		? `<div>${qrSVG(url)}<div style="font-size:7px;margin-top:2px;font-weight:600;white-space:nowrap">${escapeHTML(scanLabel)}</div></div>`
 		: ""
 	const tagline = showTagline
-		? `<div style="font-size:8px;color:#555;white-space:nowrap;text-align:${
+		? `<div style="font-size:8px;color:#000;font-weight:600;white-space:nowrap;text-align:${
 				showQR ? "right" : "center"
 			}">${escapeHTML(config.tagline)}</div>`
 		: ""

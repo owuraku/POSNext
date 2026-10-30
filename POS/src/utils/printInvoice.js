@@ -113,17 +113,20 @@ export async function hydrateLocalOnlyInvoice(invoiceData) {
 
 // The shop's receipt design, the same as Simple Shop's "Default POS Receipt" print format
 const RECEIPT_STYLES = `
+	/* Thermal printers lose thin strokes: a heavy monospace font, bold, and pure black throughout */
 	body {
-		font-family: "Courier New", Courier, monospace, Arial, sans-serif;
+		font-family: Consolas, "Lucida Console", "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace;
 		color: #000000; background: #ffffff; font-size: 12px; margin: 0; padding: 0;
 	}
 	.receipt-container {
-		font-family: "Courier New", Courier, monospace, Arial, sans-serif;
+		font-family: Consolas, "Lucida Console", "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace;
+		font-weight: 600; color: #000000; -webkit-print-color-adjust: exact;
 		width: 72mm; margin: 0 auto; padding: 5px;
 	}
 	.text-center { text-align: center; }
 	.text-right { text-align: right; }
-	.bold { font-weight: bold; }
+	.bold { font-weight: 800; }
+	.receipt-container * { color: #000000 !important; }
 	.shop-title { font-size: 16px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
 	.shop-contact { font-size: 11px; line-height: 1.3; margin-bottom: 8px; }
 	.divider { border-top: 1px dashed #000000; margin: 6px 0; }
@@ -132,7 +135,10 @@ const RECEIPT_STYLES = `
 	.meta-table td:first-child { white-space: nowrap; padding-right: 6px; }
 	.item-table th { border-bottom: 1px solid #000000; padding-bottom: 4px; font-size: 11px; }
 	.item-table td { padding: 5px 0; vertical-align: top; }
-	.item-note { font-size: 10px; color: #444; }
+	.item-table th { font-weight: 800; }
+	/* A gap between the number columns, so a quantity and a rate in the thousands don't read as one figure */
+	.item-table th + th, .item-table td + td { padding-left: 8px; }
+	.item-note { font-size: 10px; }
 	.grand-total-box { border: 1px solid #000000; padding: 6px; margin-top: 8px; }
 	.grand-total-box table td { padding: 2px 0; }
 	.offline-badge { text-align: center; font-size: 10px; font-weight: bold; border: 1px dashed #000; padding: 3px; margin: 6px 0; }
@@ -286,11 +292,7 @@ export function buildReceiptHTML(invoiceData) {
 			<table class="meta-table">
 				<tr>
 					<td style="vertical-align: top;" class="bold">${__("Billed To")}:</td>
-					<td class="text-right"><span class="bold">${escapeHTML(customer)}</span>${
-						invoiceData.contact_mobile
-							? `<br>${escapeHTML(invoiceData.contact_mobile)}`
-							: ""
-					}</td>
+					<td class="text-right"><span class="bold">${escapeHTML(customer)}</span></td>
 				</tr>
 			</table>`
 			}
@@ -300,10 +302,10 @@ export function buildReceiptHTML(invoiceData) {
 			<table class="item-table">
 				<thead>
 					<tr>
-						<th align="left" style="width: 45%;">${__("Item")}</th>
-						<th align="right" style="width: 10%;">${__("Qty")}</th>
-						<th align="right" style="width: 20%;">${__("Rate")}</th>
-						<th align="right" style="width: 25%;">${__("Amount")}</th>
+						<th align="left" style="width: 38%;">${__("Item")}</th>
+						<th align="right" style="width: 12%;">${__("Qty")}</th>
+						<th align="right" style="width: 23%;">${__("Rate")}</th>
+						<th align="right" style="width: 27%;">${__("Amount")}</th>
 					</tr>
 				</thead>
 				<tbody>${itemsHtml}</tbody>

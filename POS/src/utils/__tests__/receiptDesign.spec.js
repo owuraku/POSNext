@@ -55,6 +55,7 @@ describe("buildReceiptHTML", () => {
 			sale({
 				customer: "CUST-1",
 				customer_name: "Ama Mensah",
+				contact_mobile: "0244111222",
 				outstanding_amount: 1000,
 				payments: [{ mode_of_payment: "Cash", amount: 300 }],
 			}),
@@ -62,6 +63,7 @@ describe("buildReceiptHTML", () => {
 		expect(html).toContain("Billed To")
 		expect(html).toContain("Ama Mensah")
 		expect(html).toContain("Balance Due")
+		expect(html).not.toContain("0244111222")
 		expect(html).not.toContain("TOTAL PAID")
 	})
 
