@@ -3,7 +3,8 @@
  * Powered-by line): drawn on the receipts the POS builds in the browser, which are the ones printed for
  * sales made offline. Kept in localStorage so it still applies when the POS is offline.
  *
- * Config: { verify_url: string|null, tagline: string|null }
+ * Config: { verify_url, tagline, shop_name, shop_phone, shop_email, cashier, walk_in_customer } (any may be
+ * null). The shop details, cashier and walk-in customer are for the receipt's header (printInvoice.js).
  * - verify_url: a QR code linking to `${verify_url}?o=<offline id>`, on receipts of offline sales only.
  *   The server finds the invoice from the offline id once the sale syncs; online invoices are verified
  *   with the QR code their server print format carries.
@@ -18,7 +19,7 @@ const OFFLINE_ID =
 
 export function setReceiptFooter(config) {
 	try {
-		if (config && (config.verify_url || config.tagline)) {
+		if (config) {
 			localStorage.setItem(STORAGE_KEY, JSON.stringify(config))
 		} else {
 			localStorage.removeItem(STORAGE_KEY)

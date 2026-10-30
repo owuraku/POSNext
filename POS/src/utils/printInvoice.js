@@ -14,10 +14,6 @@ const DEFAULT_PRINT_FORMAT = "POS Next Receipt";
 // Shared helpers
 // ============================================================================
 
-function formatCurrency(amount) {
-	return Number.parseFloat(amount || 0).toFixed(2);
-}
-
 function getSalesPersonNames(invoiceData) {
 	const salesTeam = invoiceData.sales_team;
 	if (!Array.isArray(salesTeam) || salesTeam.length === 0) return "";
@@ -25,16 +21,6 @@ function getSalesPersonNames(invoiceData) {
 		.map((row) => row.sales_person_name || row.sales_person)
 		.filter(Boolean)
 		.join(", ");
-}
-
-/**
- * Fall back to summing payment rows when paid_amount is not set —
- * offline invoices lack paid_amount until server submission.
- */
-function derivePaidAmount(invoiceData) {
-	if (invoiceData.paid_amount != null) return invoiceData.paid_amount;
-	if (!Array.isArray(invoiceData.payments)) return 0;
-	return invoiceData.payments.reduce((sum, p) => sum + (Number.parseFloat(p.amount) || 0), 0);
 }
 
 /** Sales Invoices not yet on the server (offline queue / local receipt id). */
@@ -120,227 +106,248 @@ export async function hydrateLocalOnlyInvoice(invoiceData) {
 	return invoiceData;
 }
 
+// The shop's receipt design, the same as Simple Shop's "Default POS Receipt" print format
 const RECEIPT_STYLES = `
-	* { margin: 0; padding: 0; box-sizing: border-box; }
 	body {
-		font-family: 'Courier New', monospace;
-		padding: 10px; width: 80mm; margin: 0; max-width: 80mm;
-		font-weight: bold; color: black;
+		font-family: "Courier New", Courier, monospace, Arial, sans-serif;
+		color: #000000; background: #ffffff; font-size: 12px; margin: 0; padding: 0;
 	}
-	.receipt { width: 100%; }
-	.header { text-align: center; margin-bottom: 20px; border-bottom: 2px dashed #000; padding-bottom: 10px; }
-	.company-name { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
-	.invoice-info { margin-bottom: 15px; font-size: 12px; }
-	.invoice-info div { display: flex; justify-content: space-between; margin-bottom: 3px; }
-	.partial-status { color: #000; font-weight: bold; margin-bottom: 5px; }
-	.items-table { width: 100%; margin-bottom: 15px; border-top: 1px dashed #000; border-bottom: 1px dashed #000; padding: 10px 0; }
-	.item-row { margin-bottom: 10px; font-size: 12px; }
-	.item-name { font-weight: bold; margin-bottom: 3px; }
-	.item-details { display: flex; justify-content: space-between; font-size: 11px; }
-	.item-discount { display: flex; justify-content: space-between; font-size: 10px; margin-top: 2px; }
-	.item-serials { font-size: 9px; margin-top: 3px; padding: 3px 5px; border: 1px dashed #000; border-radius: 2px; }
-	.item-serials-label { font-weight: bold; margin-bottom: 2px; }
-	.item-serials-list { word-break: break-all; }
-	.totals { margin-top: 15px; border-top: 1px dashed #000; padding-top: 10px; }
-	.total-row { display: flex; justify-content: space-between; margin-bottom: 5px; font-size: 12px; }
-	.grand-total { font-size: 16px; font-weight: bold; border-top: 2px solid #000; padding-top: 10px; margin-top: 10px; }
-	.payments { margin-top: 15px; border-top: 1px dashed #000; padding-top: 10px; }
-	.payment-row { display: flex; justify-content: space-between; margin-bottom: 3px; font-size: 11px; }
-	.total-paid { font-weight: bold; border-top: 1px solid #000; padding-top: 5px; margin-top: 5px; }
-	.outstanding-row {
-		display: flex; justify-content: space-between; font-size: 13px; font-weight: bold;
-		border: 1px solid #000; padding: 8px; margin-top: 8px; border-radius: 4px;
+	.receipt-container {
+		font-family: "Courier New", Courier, monospace, Arial, sans-serif;
+		width: 72mm; margin: 0 auto; padding: 5px;
 	}
-	.offline-badge {
-		text-align: center; font-size: 11px; font-weight: bold;
-		border: 1px dashed #000; padding: 4px; margin-bottom: 10px;
-	}
-	.footer { text-align: center; margin-top: 20px; padding-top: 10px; border-top: 2px dashed #000; font-size: 11px; }
+	.text-center { text-align: center; }
+	.text-right { text-align: right; }
+	.bold { font-weight: bold; }
+	.shop-title { font-size: 16px; font-weight: bold; text-transform: uppercase; margin-bottom: 4px; }
+	.shop-contact { font-size: 11px; line-height: 1.3; margin-bottom: 8px; }
+	.divider { border-top: 1px dashed #000000; margin: 6px 0; }
+	.meta-table, .item-table { width: 100%; border-collapse: collapse; font-size: 11px; }
+	.meta-table td { padding: 1px 0; line-height: 1.2; }
+	.item-table th { border-bottom: 1px solid #000000; padding-bottom: 4px; font-size: 11px; }
+	.item-table td { padding: 5px 0; vertical-align: top; }
+	.item-note { font-size: 10px; color: #444; }
+	.grand-total-box { border: 1px solid #000000; padding: 6px; margin-top: 8px; }
+	.grand-total-box table td { padding: 2px 0; }
+	.offline-badge { text-align: center; font-size: 10px; font-weight: bold; border: 1px dashed #000; padding: 3px; margin: 6px 0; }
+	.footer { margin-top: 14px; font-size: 10px; line-height: 1.4; }
 	@media print {
 		@page { size: 80mm auto; margin: 0; }
-		body { width: 80mm; padding: 5mm; margin: 0; }
+		body { width: 100%; margin: 0; }
+		.receipt-container { width: 100%; }
 		.no-print { display: none; }
 	}
-`;
+`
+
+function escapeHTML(value) {
+	return String(value ?? "").replace(
+		/[&<>"']/g,
+		(c) =>
+			({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+				c
+			],
+	)
+}
+
+/** 1234.5 → "1,234.50", as the print format's "{:,.2f}" */
+function formatAmount(amount) {
+	return (Number.parseFloat(amount) || 0).toLocaleString("en-US", {
+		minimumFractionDigits: 2,
+		maximumFractionDigits: 2,
+	})
+}
+
+function formatQty(qty) {
+	const n = Number.parseFloat(qty) || 0
+	return Number.isInteger(n) ? String(n) : String(Number(n.toFixed(3)))
+}
+
+/** "DD-MM-YYYY HH:MM" from the invoice's posting date and time (now, for a sale just made offline) */
+function formatReceiptDate(invoiceData) {
+	const pad = (n) => String(n).padStart(2, "0")
+	const now = new Date()
+	const [y, m, d] = String(invoiceData.posting_date || "").split("-")
+	const date =
+		y && m && d
+			? `${d.slice(0, 2)}-${m}-${y}`
+			: `${pad(now.getDate())}-${pad(now.getMonth() + 1)}-${now.getFullYear()}`
+	const time = invoiceData.posting_time
+		? String(invoiceData.posting_time)
+				.split(":")
+				.slice(0, 2)
+				.map((p) => pad(Number.parseInt(p, 10) || 0))
+				.join(":")
+		: `${pad(now.getHours())}:${pad(now.getMinutes())}`
+	return `${date} ${time}`
+}
 
 /**
- * Inner receipt HTML (no shell). Used for local/offline invoices and QZ Tray.
+ * Inner receipt HTML (no shell). Used for local/offline invoices and QZ Tray. The same design as the
+ * "Default POS Receipt" print format; the shop details, cashier and walk-in customer come from bootstrap
+ * (kept for offline use, see receiptFooter.js).
  */
 export function buildReceiptHTML(invoiceData) {
-	const items = invoiceData.items || [];
-	const paidAmount = derivePaidAmount(invoiceData);
-	const salesPersonNames = getSalesPersonNames(invoiceData);
+	const shop = getReceiptFooter() || {}
+	const currency = escapeHTML(invoiceData.currency || "")
+	const money = (amount) =>
+		`${currency ? `${currency} ` : ""}${formatAmount(amount)}`
+	const items = invoiceData.items || []
+	const payments = (invoiceData.payments || []).filter((p) =>
+		Number.parseFloat(p.amount),
+	)
+	const grandTotal =
+		Number.parseFloat(invoiceData.rounded_total || invoiceData.grand_total) || 0
+	const outstanding = Number.parseFloat(invoiceData.outstanding_amount) || 0
+	const change = Number.parseFloat(invoiceData.change_amount) || 0
+	const taxes = Number.parseFloat(invoiceData.total_taxes_and_charges) || 0
+	const discount = Math.abs(Number.parseFloat(invoiceData.discount_amount) || 0)
+	const customer = invoiceData.customer_name || invoiceData.customer
+	const walkIn =
+		!customer ||
+		[invoiceData.customer, invoiceData.customer_name].includes(
+			shop.walk_in_customer,
+		)
+	const salesPersonNames = getSalesPersonNames(invoiceData)
+	const totalQty = items.reduce(
+		(sum, item) => sum + (Number.parseFloat(item.quantity ?? item.qty) || 0),
+		0,
+	)
+	const totalLabel = invoiceData.is_return
+		? __("TOTAL REFUND")
+		: outstanding > 0
+			? __("TOTAL")
+			: __("TOTAL PAID")
+
 	const itemsHtml = items
 		.map((item) => {
-			const hasDiscount =
-				(item.discount_percentage && Number.parseFloat(item.discount_percentage) > 0) ||
-				(item.discount_amount && Number.parseFloat(item.discount_amount) > 0);
-			const isFree = item.is_free_item;
-			const qty = item.quantity || item.qty || 0;
-			const displayRate = item.price_list_rate || item.rate || 0;
-			const subtotal = qty * displayRate;
+			const qty = Number.parseFloat(item.quantity ?? item.qty) || 0
+			const rate = Number.parseFloat(item.rate ?? item.price_list_rate) || 0
+			const amount =
+				item.amount != null ? Number.parseFloat(item.amount) || 0 : qty * rate
+			const notes = [
+				item.is_free_item ? __("FREE") : "",
+				Number.parseFloat(item.discount_amount) > 0
+					? `${__("Discount")} -${formatAmount(item.discount_amount)}`
+					: "",
+				item.serial_no
+					? `${__("Serial No:")} ${String(item.serial_no).replace(/\n/g, ", ")}`
+					: "",
+			].filter(Boolean)
 			return `
-						<div class="item-row">
-							<div class="item-name">${item.item_name || item.item_code} ${isFree ? __("(FREE)") : ""}</div>
-							<div class="item-details">
-								<span>${qty} × ${formatCurrency(displayRate)}</span>
-								<span><strong>${formatCurrency(subtotal)}</strong></span>
-							</div>
-							${
-								hasDiscount
-									? `<div class="item-discount"><span>Discount ${
-											item.discount_percentage
-												? `(${Number(item.discount_percentage).toFixed(
-														2
-												  )}%)`
-												: ""
-									  }</span><span>-${formatCurrency(
-											item.discount_amount || 0
-									  )}</span></div>`
-									: ""
-							}
-							${
-								item.serial_no
-									? `<div class="item-serials"><div class="item-serials-label">${__(
-											"Serial No:"
-									  )}</div><div class="item-serials-list">${String(
-											item.serial_no
-									  ).replace(/\n/g, ", ")}</div></div>`
-									: ""
-							}
-						</div>`;
+				<tr>
+					<td>
+						<span class="bold">${escapeHTML(item.item_name || item.item_code)}</span>
+						${notes.map((note) => `<div class="item-note">${escapeHTML(note)}</div>`).join("")}
+					</td>
+					<td class="text-right">${formatQty(qty)}</td>
+					<td class="text-right">${formatAmount(rate)}</td>
+					<td class="text-right">${formatAmount(amount)}</td>
+				</tr>`
 		})
-		.join("");
+		.join("")
+
+	const row = (label, value, style = "") =>
+		`<tr${style ? ` style="${style}"` : ""}><td>${label}</td><td class="text-right">${value}</td></tr>`
 
 	return `
-			<div class="receipt">
-				<div class="header">
-					<div class="company-name">${invoiceData.company || "POS Next"}</div>
-					<div style="font-size: 12px;">${invoiceData.header || __("TAX INVOICE")}</div>
-				</div>
-
-				${invoiceData.is_offline ? `<div class="offline-badge">${__("OFFLINE — PENDING SYNC")}</div>` : ""}
-
-				<div class="invoice-info">
-					<div><span>${__("Invoice #:")}</span><span><strong>${invoiceData.name}</strong></span></div>
-					<div><span>${__("Date:")}</span><span>${new Date(
-		invoiceData.posting_date || Date.now()
-	).toLocaleString()}</span></div>
-					${
-						invoiceData.customer_name || invoiceData.customer
-							? `<div><span>${__("Customer:")}</span><span>${
-									invoiceData.customer_name || invoiceData.customer
-							  }</span></div>`
-							: ""
-					}
-					${
-						salesPersonNames
-							? `<div><span>${__("Sales Person:")}</span><span>${salesPersonNames}</span></div>`
-							: ""
-					}
-					${
-						invoiceData.coupon_code
-							? `<div><span>${__("Coupon:")}</span><span>${invoiceData.coupon_code}</span></div>`
-							: ""
-					}
-					${
-						invoiceData.status === "Partly Paid" ||
-						(invoiceData.outstanding_amount &&
-							invoiceData.outstanding_amount > 0 &&
-							invoiceData.outstanding_amount < invoiceData.grand_total)
-							? `<div class="partial-status"><span>${__("Status:")}</span><span>${__(
-									"PARTIAL PAYMENT"
-							  )}</span></div>`
-							: ""
-					}
-				</div>
-
-				<div class="items-table">
-					${itemsHtml}
-				</div>
-
-				<div class="totals">
-					${
-						invoiceData.total_taxes_and_charges &&
-						invoiceData.total_taxes_and_charges > 0
-							? `
-					<div class="total-row"><span>${__("Subtotal:")}</span><span>${formatCurrency(
-									(invoiceData.grand_total || 0) -
-										(invoiceData.total_taxes_and_charges || 0)
-							  )}</span></div>
-					<div class="total-row"><span>${__("Tax:")}</span><span>${formatCurrency(
-									invoiceData.total_taxes_and_charges
-							  )}</span></div>`
-							: ""
-					}
-					${
-						invoiceData.discount_amount
-							? `
-					<div class="total-row" style="color: #28a745;"><span>Additional Discount${
-						invoiceData.additional_discount_percentage
-							? ` (${Number(invoiceData.additional_discount_percentage).toFixed(
-									1
-							  )}%)`
-							: ""
-					}:</span><span>-${formatCurrency(
-									Math.abs(invoiceData.discount_amount)
-							  )}</span></div>`
-							: ""
-					}
-					<div class="total-row grand-total"><span>${__("TOTAL:")}</span><span>${formatCurrency(
-		invoiceData.grand_total
-	)}</span></div>
-				</div>
-
+		<div class="receipt-container">
+			<div class="text-center">
+				<div class="shop-title">${escapeHTML(shop.shop_name || invoiceData.company || "POS Next")}</div>
 				${
-					invoiceData.payments && invoiceData.payments.length > 0
-						? `
-				<div class="payments">
-					<div style="font-weight: bold; margin-bottom: 5px; font-size: 12px;">${__("Payments:")}</div>
-					${invoiceData.payments
-						.map(
-							(p) =>
-								`<div class="payment-row"><span>${
-									p.mode_of_payment
-								}:</span><span>${formatCurrency(p.amount)}</span></div>`
-						)
-						.join("")}
-					<div class="payment-row total-paid"><span>${__("Total Paid:")}</span><span>${formatCurrency(
-								paidAmount
-						  )}</span></div>
-					${
-						invoiceData.change_amount && invoiceData.change_amount > 0
-							? `<div class="payment-row" style="font-weight: bold; margin-top: 5px;"><span>${__(
-									"Change:"
-							  )}</span><span>${formatCurrency(
-									invoiceData.change_amount
-							  )}</span></div>`
-							: ""
-					}
-					${
-						invoiceData.outstanding_amount && invoiceData.outstanding_amount > 0
-							? `<div class="outstanding-row"><span>${__(
-									"BALANCE DUE:"
-							  )}</span><span>${formatCurrency(
-									invoiceData.outstanding_amount
-							  )}</span></div>`
-							: ""
-					}
-				</div>`
+					shop.shop_phone || shop.shop_email
+						? `<div class="shop-contact">${[
+								shop.shop_phone
+									? `${__("Tel")}: ${escapeHTML(shop.shop_phone)}`
+									: "",
+								shop.shop_email
+									? `${__("Email")}: ${escapeHTML(shop.shop_email)}`
+									: "",
+							]
+								.filter(Boolean)
+								.join("<br>")}</div>`
 						: ""
 				}
+			</div>
 
-				<div class="footer">
-					<div style="margin-bottom: 5px;">${invoiceData.footer || __("Thank you for your business!")}</div>
-					${
-						// An app's own Powered-by line (receipt footer hook) takes the place of POS Next's
-						invoiceData.footer || getReceiptFooter()?.tagline
-							? ""
-							: `<div style="font-size: 10px;">Powered by <a href="https://nexus.brainwise.me" target="_blank" style="color: #3b82f6; text-decoration: none; font-weight: 600;">BrainWise</a></div>`
-					}
-				</div>
-				${receiptFooterHTML(invoiceData, __("Scan to verify"))}
-			</div>`;
+			<div class="divider"></div>
+
+			<table class="meta-table">
+				<tr><td class="bold">${__("RECEIPT #")}:</td><td class="text-right bold">${escapeHTML(invoiceData.name)}</td></tr>
+				${shop.cashier ? row(`${__("Cashier")}:`, escapeHTML(invoiceData.cashier_name || shop.cashier)) : ""}
+				${row(`${__("Date")}:`, formatReceiptDate(invoiceData))}
+				${salesPersonNames ? row(`${__("Sales Person")}:`, escapeHTML(salesPersonNames)) : ""}
+				${invoiceData.coupon_code ? row(`${__("Coupon")}:`, escapeHTML(invoiceData.coupon_code)) : ""}
+			</table>
+
+			${invoiceData.is_offline ? `<div class="offline-badge">${__("OFFLINE — PENDING SYNC")}</div>` : ""}
+
+			${
+				walkIn
+					? ""
+					: `<div class="divider"></div>
+			<table class="meta-table">
+				<tr>
+					<td style="vertical-align: top;" class="bold">${__("Billed To")}:</td>
+					<td class="text-right"><span class="bold">${escapeHTML(customer)}</span>${
+						invoiceData.contact_mobile
+							? `<br>${escapeHTML(invoiceData.contact_mobile)}`
+							: ""
+					}</td>
+				</tr>
+			</table>`
+			}
+
+			<div class="divider"></div>
+
+			<table class="item-table">
+				<thead>
+					<tr>
+						<th align="left" style="width: 45%;">${__("Item")}</th>
+						<th align="right" style="width: 10%;">${__("Qty")}</th>
+						<th align="right" style="width: 20%;">${__("Rate")}</th>
+						<th align="right" style="width: 25%;">${__("Amount")}</th>
+					</tr>
+				</thead>
+				<tbody>${itemsHtml}</tbody>
+			</table>
+
+			<div class="divider"></div>
+
+			<table class="meta-table">
+				${row(`<span class="bold">${__("Total Items Purchased")}:</span>`, `<span class="bold">${formatQty(totalQty)}</span>`)}
+				${taxes || discount ? row(`${__("Subtotal")}:`, money(grandTotal - taxes + discount)) : ""}
+				${discount ? row(`${__("Discount")}:`, `-${money(discount)}`) : ""}
+				${taxes ? row(`${__("Tax")}:`, money(taxes)) : ""}
+			</table>
+
+			<div class="grand-total-box">
+				<table style="width: 100%; border-collapse: collapse;">
+					${row(`${totalLabel}:`, money(grandTotal), "font-size: 14px; font-weight: bold;")}
+					<tr><td colspan="2" style="border-top: 1px dashed #000000; padding-top: 4px;"></td></tr>
+					${payments
+						.map((p) =>
+							row(
+								`<span style="font-style: italic;">${__("Paid via {0}", [escapeHTML(p.mode_of_payment)])}:</span>`,
+								money(p.amount),
+								"font-size: 11px;",
+							),
+						)
+						.join("")}
+					${change > 0 ? row(`<span style="font-style: italic;">${__("Change Tendered")}:</span>`, money(change), "font-size: 11px;") : ""}
+					${outstanding > 0 ? row(`${__("Balance Due")}:`, money(outstanding), "font-size: 12px; font-weight: bold;") : ""}
+				</table>
+			</div>
+
+			<div class="divider"></div>
+
+			<div class="footer text-center">
+				<p class="bold" style="font-size: 12px; margin-bottom: 4px;">${escapeHTML(
+					invoiceData.footer || __("Thank you for your purchase!"),
+				)}</p>
+			</div>
+
+			${receiptFooterHTML(invoiceData, __("Scan to verify"))}
+		</div>`
 }
 
 function buildReceiptDocumentHTML(invoiceData, { includeControls = false } = {}) {
