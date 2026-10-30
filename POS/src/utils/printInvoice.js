@@ -120,7 +120,7 @@ const RECEIPT_STYLES = `
 	}
 	.receipt-container {
 		font-family: Consolas, "Lucida Console", "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace;
-		font-weight: 600; color: #000000; -webkit-print-color-adjust: exact;
+		font-weight: 600; color: #000000;
 		width: 72mm; margin: 0 auto; padding: 5px;
 	}
 	.text-center { text-align: center; }
@@ -133,9 +133,8 @@ const RECEIPT_STYLES = `
 	.meta-table, .item-table { width: 100%; border-collapse: collapse; font-size: 11px; }
 	.meta-table td { padding: 1px 0; line-height: 1.2; }
 	.meta-table td:first-child { white-space: nowrap; padding-right: 6px; }
-	.item-table th { border-bottom: 1px solid #000000; padding-bottom: 4px; font-size: 11px; }
+	.item-table th { border-bottom: 1px solid #000000; padding-bottom: 4px; font-size: 11px; font-weight: 800; }
 	.item-table td { padding: 5px 0; vertical-align: top; }
-	.item-table th { font-weight: 800; }
 	/* A gap between the number columns, so a quantity and a rate in the thousands don't read as one figure */
 	.item-table th + th, .item-table td + td { padding-left: 8px; }
 	.item-note { font-size: 10px; }
@@ -291,7 +290,7 @@ export function buildReceiptHTML(invoiceData) {
 					: `<div class="divider"></div>
 			<table class="meta-table">
 				<tr>
-					<td style="vertical-align: top;" class="bold">${__("Billed To")}:</td>
+					<td class="bold">${__("Billed To")}:</td>
 					<td class="text-right"><span class="bold">${escapeHTML(customer)}</span></td>
 				</tr>
 			</table>`
