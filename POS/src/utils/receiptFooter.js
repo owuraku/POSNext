@@ -67,7 +67,7 @@ function qrSVG(text) {
 	qr.addData(text)
 	qr.make()
 	return qr
-		.createSvgTag({ cellSize: 2, margin: 1, scalable: true })
+		.createSvgTag({ cellSize: 2, margin: 2, scalable: true })
 		.replace("<svg ", '<svg style="width:14mm;height:14mm;display:block" ')
 }
 
