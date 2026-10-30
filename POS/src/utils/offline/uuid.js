@@ -14,9 +14,14 @@ export const generateUUID = () => {
 		return crypto.randomUUID();
 	}
 
-	// Fallback implementation for older browsers/environments
+	// Fallback for older browsers and insecure (plain http) contexts, where randomUUID is missing.
+	// getRandomValues is available there too, so offline ids stay unguessable (receipt QR codes rely on it).
+	const randomNibble =
+		typeof crypto !== "undefined" && crypto.getRandomValues
+			? () => crypto.getRandomValues(new Uint8Array(1))[0] & 0xf
+			: () => (Math.random() * 16) | 0;
 	return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-		const r = (Math.random() * 16) | 0;
+		const r = randomNibble();
 		const v = c === "x" ? r : (r & 0x3) | 0x8;
 		return v.toString(16);
 	});

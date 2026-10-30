@@ -127,7 +127,7 @@ def _get_receipt_footer():
 	footer = {"verify_url": None, "tagline": None}
 	for method in frappe.get_hooks("pos_next_receipt_footer"):
 		try:
-			footer.update({k: v for k, v in (frappe.get_attr(method)() or {}).items() if v})
+			footer.update({k: v for k, v in (frappe.get_attr(method)() or {}).items() if k in footer and v})
 		except Exception:
 			frappe.log_error(frappe.get_traceback(), "POS Next receipt footer hook failed")
 	return footer

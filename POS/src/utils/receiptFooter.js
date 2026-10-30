@@ -68,7 +68,7 @@ export function receiptFooterHTML(invoiceData, scanLabel = "Scan to verify") {
 	const showTagline = !!config.tagline
 	if (!showQR && !showTagline) return ""
 	const url = showQR
-		? `${config.verify_url}?o=${encodeURIComponent(offlineId)}`
+		? `${config.verify_url}${config.verify_url.includes("?") ? "&" : "?"}o=${encodeURIComponent(offlineId)}`
 		: ""
 	const qr = showQR
 		? `<div>${qrSVG(url)}<div style="font-size:7px;margin-top:2px">${escapeHTML(scanLabel)}</div></div>`
