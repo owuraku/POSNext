@@ -113,7 +113,7 @@ export async function hydrateLocalOnlyInvoice(invoiceData) {
 
 // The shop's receipt design, the same as Simple Shop's "Default POS Receipt" print format
 const RECEIPT_STYLES = `
-	/* Thermal printers lose thin strokes: a heavy monospace font in pure black; regular weight, key parts bold */
+	/* Thermal printers lose thin strokes and greys: pure black throughout; regular weight, key parts bold */
 	body {
 		font-family: Consolas, "Lucida Console", "DejaVu Sans Mono", "Liberation Mono", "Courier New", monospace;
 		color: #000000; background: #ffffff; font-size: 12px; margin: 0; padding: 0;
