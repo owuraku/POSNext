@@ -399,9 +399,13 @@ export const usePOSSyncStore = defineStore("posSync", () => {
 				log.error("Failed to load sales persons", error);
 			}
 
-			// Seed expense dialog cache whenever a shift is open. Server rejects if
-			// POS expense is disabled on the profile.
-			if (posOpeningShift) {
+			// Seed expense dialog cache when a shift is open and the profile allows POS expenses (not when
+			// another app records them with its own form: the dialog's data is refused then)
+			if (
+				posOpeningShift &&
+				Number(currentProfile.posa_allow_pos_expense || 0) === 1 &&
+				Number(currentProfile.posa_external_expense || 0) !== 1
+			) {
 				try {
 					const expenseDialogData = await call(
 						"pos_next.api.expenses.get_expense_dialog_data",
