@@ -91,13 +91,22 @@ def check_opening_shift(user=None):
 	shift_data = open_shifts[0]
 	data = {}
 	data["pos_opening_shift"] = frappe.get_doc("POS Opening Shift", shift_data["name"])
-	data["pos_profile"] = frappe.get_doc("POS Profile", shift_data["pos_profile"])
+	data["pos_profile"] = _shift_profile(shift_data["pos_profile"])
 	data["company"] = frappe.get_doc("Company", data["pos_profile"].company)
 	# Include server timestamp so frontend can compute shift duration
 	# without timezone mismatch (period_start_date is in server timezone)
 	data["server_now"] = str(get_datetime())
 
 	return data
+
+
+def _shift_profile(pos_profile):
+	"""The shift's POS Profile, and whether another app records its expenses (posa_external_expense)."""
+	from pos_next.api.expenses import external_expense_handler
+
+	profile = frappe.get_doc("POS Profile", pos_profile).as_dict()
+	profile["posa_external_expense"] = 1 if external_expense_handler(pos_profile) else 0
+	return profile
 
 
 @frappe.whitelist()
@@ -138,7 +147,7 @@ def create_opening_shift(pos_profile, company, balance_details):
 
 	data = {}
 	data["pos_opening_shift"] = new_pos_opening.as_dict()
-	data["pos_profile"] = frappe.get_doc("POS Profile", pos_profile)
+	data["pos_profile"] = _shift_profile(pos_profile)
 	data["company"] = frappe.get_doc("Company", company)
 
 	return data

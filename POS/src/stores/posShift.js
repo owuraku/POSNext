@@ -26,8 +26,12 @@ export const usePOSShiftStore = defineStore("posShift", () => {
 	const writeOffAccount = computed(() => currentProfile.value?.write_off_account);
 	const writeOffCostCenter = computed(() => currentProfile.value?.write_off_cost_center);
 	const writeOffLimit = computed(() => currentProfile.value?.write_off_limit || 0);
+	// Another app records the till's expenses with its own form (pos_next_expense_override hook)
+	const externalExpense = computed(
+		() => Number(currentProfile.value?.posa_external_expense || 0) === 1,
+	);
 	const allowPosExpense = computed(
-		() => Number(currentProfile.value?.posa_allow_pos_expense || 0) === 1,
+		() => externalExpense.value || Number(currentProfile.value?.posa_allow_pos_expense || 0) === 1,
 	);
 	const maximumExpenseAmount = computed(
 		() => Number.parseFloat(currentProfile.value?.posa_maximum_expense_amount) || 0,
@@ -117,6 +121,7 @@ export const usePOSShiftStore = defineStore("posShift", () => {
 		writeOffCostCenter,
 		writeOffLimit,
 		allowPosExpense,
+		externalExpense,
 		maximumExpenseAmount,
 
 		// Actions

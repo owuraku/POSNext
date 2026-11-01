@@ -2650,6 +2650,22 @@ function openExpenseDialog() {
 		return;
 	}
 
+	if (shiftStore.externalExpense) {
+		// Another app records expenses with its own form: it listens for this event and cancels it
+		const event = new CustomEvent("posnext:expense", {
+			cancelable: true,
+			detail: {
+				pos_profile: shiftStore.profileName,
+				pos_opening_shift: shiftStore.currentShift?.name,
+				currency: shiftStore.profileCurrency,
+			},
+		});
+		if (window.dispatchEvent(event)) {
+			showError(__("The expense form didn't load. Reload the page and try again."));
+		}
+		return;
+	}
+
 	uiStore.showExpenseDialog = true;
 }
 
