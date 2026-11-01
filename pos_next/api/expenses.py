@@ -23,9 +23,26 @@ from frappe.utils import cint, cstr, flt, getdate, today
 EXPENSE_ACCOUNT_PAGE_LENGTH = 50
 
 
+def external_expense_handler(pos_profile=None):
+	"""Whether another app records the till's expenses with its own form (it hooks
+	`pos_next_expense_override`, a function taking the POS Profile name and returning truthy while it does).
+	The POS's expense button then raises the `posnext:expense` browser event instead of opening this dialog,
+	and the dialog's data is refused. Expenses already queued offline still sync."""
+	return any(frappe.get_attr(method)(pos_profile) for method in frappe.get_hooks("pos_next_expense_override"))
+
+
+def _refuse_if_external(pos_profile):
+	if external_expense_handler(pos_profile):
+		frappe.throw(
+			_("Expenses are recorded with the shop's own expense form. Reload the POS to use it."),
+			title=_("POS Expense Disabled"),
+		)
+
+
 @frappe.whitelist()
 def get_expense_dialog_data(pos_profile, pos_opening_shift):
 	"""Return expense accounts and payment methods for the expense dialog."""
+	_refuse_if_external(pos_profile)
 	validate_pos_expense_enabled(pos_profile)
 	shift = validate_open_shift(pos_opening_shift, pos_profile)
 
@@ -59,6 +76,7 @@ def get_expense_dialog_data(pos_profile, pos_opening_shift):
 @frappe.whitelist()
 def search_expense_accounts(pos_profile, pos_opening_shift, txt=None):
 	"""Server-side expense account search for the POS dialog."""
+	_refuse_if_external(pos_profile)
 	validate_pos_expense_enabled(pos_profile)
 	shift = validate_open_shift(pos_opening_shift, pos_profile)
 	return get_expense_accounts(shift.company, txt=txt, pos_profile=pos_profile)
