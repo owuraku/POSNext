@@ -215,9 +215,11 @@ export function buildReceiptHTML(invoiceData) {
 		(sum, item) => sum + (Number.parseFloat(item.quantity ?? item.qty) || 0),
 		0,
 	)
+	// A held (draft) sale printed for the customer: nothing is paid yet, and it must not pass for a receipt
+	const isDraft = invoiceData.status === "Draft"
 	const totalLabel = invoiceData.is_return
 		? __("TOTAL REFUND")
-		: outstanding > 0
+		: outstanding > 0 || isDraft
 			? __("TOTAL")
 			: __("TOTAL PAID")
 
@@ -283,6 +285,7 @@ export function buildReceiptHTML(invoiceData) {
 			</table>
 
 			${invoiceData.is_offline ? `<div class="offline-badge">${__("OFFLINE — PENDING SYNC")}</div>` : ""}
+			${isDraft ? `<div class="offline-badge">${__("DRAFT — NOT PAID")}</div>` : ""}
 
 			${
 				walkIn

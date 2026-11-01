@@ -78,4 +78,10 @@ describe("buildReceiptHTML", () => {
 		)
 		expect(html).not.toContain("<img src=x")
 	})
+
+	it("marks a printed held sale as a draft, not paid", () => {
+		const html = buildReceiptHTML(sale({ is_offline: false, status: "Draft", payments: [] }))
+		expect(html).toContain("DRAFT — NOT PAID")
+		expect(html).not.toContain("TOTAL PAID")
+	})
 })
