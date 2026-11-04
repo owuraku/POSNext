@@ -214,6 +214,27 @@
 						</svg>
 						<span>{{ __("Switch To Desk") }}</span>
 					</button>
+					<!-- A Desk page another app offers (pos_next_desk_link hook), e.g. Manage Shop -->
+					<button
+						v-if="deskLink"
+						@click="openDeskLink"
+						class="w-full text-start px-4 py-2.5 text-sm text-gray-700 hover:bg-emerald-50 flex items-center gap-3 transition-colors"
+					>
+						<svg
+							class="w-5 h-5 text-emerald-600"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M3 9l9-6 9 6v11a1 1 0 01-1 1h-5v-6H9v6H4a1 1 0 01-1-1V9z"
+							/>
+						</svg>
+						<span>{{ deskLink.label }}</span>
+					</button>
 					<hr class="my-1 border-gray-100" />
 					<button
 						@click="lockSession()"
@@ -233,6 +254,25 @@
 							/>
 						</svg>
 						<span>{{ __("Lock Screen") }}</span>
+					</button>
+					<button
+						@click="showSetLockPin = true"
+						class="w-full text-start px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 flex items-center gap-3 transition-colors"
+					>
+						<svg
+							class="w-5 h-5 text-amber-600"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z"
+							/>
+						</svg>
+						<span>{{ pinInfo.hasPin ? __("Change Lock PIN") : __("Set Lock PIN") }}</span>
 					</button>
 				</template>
 				<template #additional-actions>
@@ -1100,6 +1140,7 @@
 
 		<!-- Session Lock Screen (outside v-if/v-else so it renders even during loading) -->
 		<SessionLockScreen />
+		<SetLockPinDialog v-model="showSetLockPin" />
 	</div>
 </template>
 
@@ -1119,6 +1160,7 @@ import ShiftPaymentsDialog from "@/components/ShiftPaymentsDialog.vue";
 import ShiftOpeningDialog from "@/components/ShiftOpeningDialog.vue";
 import ClearCacheOverlay from "@/components/common/ClearCacheOverlay.vue";
 import SessionLockScreen from "@/components/common/SessionLockScreen.vue";
+import SetLockPinDialog from "@/components/common/SetLockPinDialog.vue";
 import LoadingSpinner from "@/components/common/LoadingSpinner.vue";
 import POSFooter from "@/components/common/POSFooter.vue";
 import ManagementSlider from "@/components/pos/ManagementSlider.vue";
@@ -1211,7 +1253,10 @@ const {
 	configure: configureSessionLock,
 	startActivityTracking,
 	stopActivityTracking,
+	pinInfo,
+	setPinInfo,
 } = useSessionLock();
+const showSetLockPin = ref(false);
 
 // POS Events system
 const {
@@ -1382,6 +1427,18 @@ const canRecordPosExpense = computed(
 
 /** Desk link only for users with the Nexus POS Manager role (from bootstrap API). */
 const canSwitchToDesk = computed(() => Boolean(bootstrapStore.data?.can_switch_to_desk));
+/** {label, route} of a Desk page another app offers from the menu (e.g. Manage Shop), for this user. */
+const deskLink = computed(() => bootstrapStore.data?.desk_link || null);
+// Whether the user unlocks the screen with a PIN, and its length
+watch(
+	() => bootstrapStore.data,
+	(data) => {
+		if (data && "has_lock_pin" in data) {
+			setPinInfo({ has_pin: data.has_lock_pin, length: data.authorization_pin_length });
+		}
+	},
+	{ immediate: true },
+);
 
 // Resize state
 let resizeState = null;
@@ -2663,6 +2720,10 @@ function openExpenseDialog() {
 	}
 
 	uiStore.showExpenseDialog = true;
+}
+
+function openDeskLink() {
+	if (deskLink.value?.route && typeof window !== "undefined") window.location.assign(deskLink.value.route);
 }
 
 function switchToDesk() {

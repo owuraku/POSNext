@@ -105,10 +105,10 @@ function getCurrentUserId() {
 	return userData.userId || window.frappe?.session?.user || null;
 }
 
-function cachePasswordHash(user, hash, salt) {
+function cachePasswordHash(user, hash, salt, key = PASSWORD_HASH_KEY) {
 	try {
 		localStorage.setItem(
-			PASSWORD_HASH_KEY,
+			key,
 			JSON.stringify({ user, hash, salt, ts: Date.now() })
 		);
 	} catch {
@@ -116,16 +116,16 @@ function cachePasswordHash(user, hash, salt) {
 	}
 }
 
-function getCachedPasswordHash() {
+function getCachedPasswordHash(key = PASSWORD_HASH_KEY) {
 	try {
-		const raw = localStorage.getItem(PASSWORD_HASH_KEY);
+		const raw = localStorage.getItem(key);
 		if (!raw) return null;
 
 		const data = JSON.parse(raw);
 
 		// Reject if data is malformed
 		if (!data?.hash || !data?.salt || !data?.user || !data?.ts) {
-			localStorage.removeItem(PASSWORD_HASH_KEY);
+			localStorage.removeItem(key);
 			return null;
 		}
 
@@ -137,19 +137,19 @@ function getCachedPasswordHash() {
 
 		// Reject if hash belongs to a different user
 		if (data.user !== currentUser) {
-			localStorage.removeItem(PASSWORD_HASH_KEY);
+			localStorage.removeItem(key);
 			return null;
 		}
 
 		// Reject if expired
 		if (Date.now() - data.ts > HASH_TTL_MS) {
-			localStorage.removeItem(PASSWORD_HASH_KEY);
+			localStorage.removeItem(key);
 			return null;
 		}
 
 		return { hash: data.hash, salt: data.salt };
 	} catch {
-		localStorage.removeItem(PASSWORD_HASH_KEY);
+		localStorage.removeItem(key);
 		return null;
 	}
 }
@@ -157,9 +157,52 @@ function getCachedPasswordHash() {
 function clearCachedPasswordHash() {
 	try {
 		localStorage.removeItem(PASSWORD_HASH_KEY);
+		localStorage.removeItem(PIN_HASH_KEY);
 	} catch {
 		// Ignore
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Lock PIN: the user's POS authorization PIN unlocks the screen when they have one
+// ---------------------------------------------------------------------------
+const PIN_HASH_KEY = "pos_session_pin_hash";
+const PIN_INFO_KEY = "pos_lock_pin_info";
+const DEFAULT_PIN_LENGTH = 4;
+
+// Kept per user, so a locked till that reloads offline still knows to ask for a PIN
+function readPinInfo() {
+	try {
+		const data = JSON.parse(localStorage.getItem(PIN_INFO_KEY) || "null");
+		const user = getCurrentUserId();
+		if (data && (!user || data.user === user)) {
+			return { hasPin: Boolean(data.has_pin), length: data.length || DEFAULT_PIN_LENGTH };
+		}
+	} catch {
+		// Ignore
+	}
+	return { hasPin: false, length: DEFAULT_PIN_LENGTH };
+}
+
+/** Whether the user has a PIN, and its length (from the bootstrap, or after setting one). */
+function setPinInfo({ has_pin, length }) {
+	pinInfo.value = { hasPin: Boolean(has_pin), length: length || pinInfo.value.length || DEFAULT_PIN_LENGTH };
+	try {
+		localStorage.setItem(
+			PIN_INFO_KEY,
+			JSON.stringify({ user: getCurrentUserId(), has_pin: pinInfo.value.hasPin, length: pinInfo.value.length })
+		);
+		if (!pinInfo.value.hasPin) localStorage.removeItem(PIN_HASH_KEY);
+	} catch {
+		// Ignore
+	}
+}
+
+/** Keep the PIN (hashed) for unlocking offline, e.g. right after it is set. */
+async function cachePinHash(pin) {
+	if (!globalThis.crypto?.subtle || !pin) return;
+	const { hash, salt } = await hashPassword(String(pin));
+	cachePasswordHash(getCurrentUserId(), hash, salt, PIN_HASH_KEY);
 }
 
 async function cachePasswordHashFromLogin(password) {
@@ -227,6 +270,7 @@ const isLocked = ref(restored.locked);
 const isVerifying = ref(false);
 const verifyError = ref("");
 const lockedUser = ref(restored.user);
+const pinInfo = ref(readPinInfo());
 
 let inactivityTimer = null;
 let lastActivityTime = 0;
@@ -270,6 +314,7 @@ function lock() {
 
 	isLocked.value = true;
 	lockedUser.value = getUserInfo();
+	if (!pinInfo.value.hasPin) pinInfo.value = readPinInfo();
 
 	persistLock(lockedUser.value);
 
@@ -297,7 +342,8 @@ function unlockSuccess() {
 	inactivityTimer = setTimeout(tryLock, lockTimeoutMs);
 }
 
-async function verifyOfflinePassword(password) {
+async function verifyOfflinePassword(password, kind = "password") {
+	const isPin = kind === "pin";
 	// Brute-force protection
 	const limit = checkOfflineAttemptLimit();
 	if (!limit.allowed) {
@@ -307,11 +353,13 @@ async function verifyOfflinePassword(password) {
 		};
 	}
 
-	const cached = getCachedPasswordHash();
+	const cached = getCachedPasswordHash(isPin ? PIN_HASH_KEY : PASSWORD_HASH_KEY);
 	if (!cached) {
 		return {
 			success: false,
-			error: __("Cannot verify password offline. No cached credentials available."),
+			error: isPin
+				? __("Cannot verify the PIN offline yet. Unlock with your password.")
+				: __("Cannot verify password offline. No cached credentials available."),
 		};
 	}
 
@@ -322,10 +370,15 @@ async function verifyOfflinePassword(password) {
 	}
 
 	recordFailedAttempt();
-	return { success: false, error: __("Incorrect password") };
+	return { success: false, error: isPin ? __("Incorrect PIN") : __("Incorrect password") };
 }
 
-async function unlock(password) {
+/**
+ * Unlock with the user's password, or (kind "pin") their PIN.
+ * @returns {Promise<{success?: boolean, sessionExpired?: boolean}>}
+ */
+async function unlock(password, kind = "password") {
+	const isPin = kind === "pin";
 	isVerifying.value = true;
 	verifyError.value = "";
 
@@ -339,7 +392,7 @@ async function unlock(password) {
 
 	// Offline fallback — verify against cached hash
 	if (offlineState.isOffline) {
-		const result = await verifyOfflinePassword(password);
+		const result = await verifyOfflinePassword(password, kind);
 		if (result.success) {
 			unlockSuccess();
 			return { success: true };
@@ -351,8 +404,11 @@ async function unlock(password) {
 
 	// Online — verify against server
 	try {
-		const res = await call("pos_next.api.auth.verify_session_password", { password });
-		const data = res?.message || res;
+		const res = isPin
+			? await call("pos_next.api.auth.verify_session_pin", { pin: password })
+			: await call("pos_next.api.auth.verify_session_password", { password });
+		// call() already unwraps Frappe's {message}; the result's own message is the reason it failed
+		const data = res && typeof res.message === "object" && res.message !== null ? res.message : res;
 
 		if (data?.verified) {
 			clearAttemptCounter();
@@ -361,16 +417,19 @@ async function unlock(password) {
 			// Cache hash for offline use — fire-and-forget so UI unblocks immediately
 			const user = getCurrentUserId();
 			hashPassword(password).then(({ hash, salt }) => {
-				cachePasswordHash(user, hash, salt);
+				cachePasswordHash(user, hash, salt, isPin ? PIN_HASH_KEY : PASSWORD_HASH_KEY);
 			});
 
 			return { success: true };
 		}
 
+		// The PIN was removed meanwhile: ask for the password
+		if (isPin && data?.no_pin) setPinInfo({ has_pin: false });
+
 		// Wrong password — backend returns { verified: false, message: "..." }
 		recordFailedAttempt();
 		isVerifying.value = false;
-		verifyError.value = data?.message || __("Incorrect password");
+		verifyError.value = data?.message || (isPin ? __("Incorrect PIN") : __("Incorrect password"));
 		return { success: false };
 	} catch (error) {
 		const httpStatus = error?.status;
@@ -382,7 +441,7 @@ async function unlock(password) {
 		}
 
 		// Network error — fall back to cached hash
-		const result = await verifyOfflinePassword(password);
+		const result = await verifyOfflinePassword(password, kind);
 		if (result.success) {
 			unlockSuccess();
 			return { success: true };
@@ -394,7 +453,9 @@ async function unlock(password) {
 		}
 
 		isVerifying.value = false;
-		verifyError.value = __("Could not verify password. Please try again.");
+		verifyError.value = isPin
+			? __("Could not verify the PIN. Please try again.")
+			: __("Could not verify password. Please try again.");
 		return { success: false };
 	}
 }
@@ -491,5 +552,9 @@ export function useSessionLock() {
 		startActivityTracking,
 		stopActivityTracking,
 		cachePasswordHashFromLogin,
+		pinInfo: readonly(pinInfo),
+		setPinInfo,
+		cachePinHash,
+		clearVerifyError: () => (verifyError.value = ""),
 	};
 }

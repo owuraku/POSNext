@@ -72,6 +72,11 @@ def get_initial_data():
 		"pos_settings": None,
 		"payment_methods": [],
 		"receipt_footer": None,
+		# Whether the user has a PIN for unlocking the screen (their POS authorization PIN), and its length
+		"has_lock_pin": _has_lock_pin(),
+		"authorization_pin_length": _get_authorization_pin_length(),
+		# A Desk page another app offers from the POS menu (hook pos_next_desk_link), e.g. the shop's dashboard
+		"desk_link": _get_desk_link(),
 	}
 
 	# Get open shift - if no shift, return early with defaults
@@ -113,7 +118,6 @@ def get_initial_data():
 	result["pos_settings"] = _get_pos_settings(pos_profile)
 	result["payment_methods"] = _get_payment_methods(pos_profile_name)
 	result["authorization_policy"] = _get_authorization_policy(pos_profile_name)
-	result["authorization_pin_length"] = _get_authorization_pin_length()
 
 	return result
 
@@ -121,6 +125,30 @@ def get_initial_data():
 # =============================================================================
 # Private Helper Functions
 # =============================================================================
+
+
+def _has_lock_pin():
+	try:
+		from pos_next.authorization import pin as pin_store
+
+		return pin_store.has_pin(frappe.session.user)
+	except Exception:
+		frappe.log_error(frappe.get_traceback(), "Has Lock PIN Error")
+		return False
+
+
+def _get_desk_link():
+	"""{label, route} from the first app hooking `pos_next_desk_link` (a function returning one for this user,
+	or None): shown in the POS menu, e.g. "Manage Shop" opening the shop's dashboard."""
+	for method in frappe.get_hooks("pos_next_desk_link"):
+		try:
+			link = frappe.get_attr(method)()
+		except Exception:
+			frappe.log_error(frappe.get_traceback(), "POS Desk Link Hook Error")
+			continue
+		if link and link.get("route"):
+			return {"label": link.get("label") or _("Desk"), "route": link["route"]}
+	return None
 
 
 # What apps may set through the pos_next_receipt_footer hook
