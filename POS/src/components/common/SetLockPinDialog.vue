@@ -1,6 +1,6 @@
 <template>
 	<div
-		v-if="modelValue"
+		v-if="modelValue && !isLocked"
 		class="pointer-events-auto fixed inset-0 z-[var(--z-authorization)] flex items-center justify-center bg-black/50 p-4"
 		@pointerdown.stop
 	>
@@ -108,7 +108,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue";
 const props = defineProps({ modelValue: { type: Boolean, default: false } });
 const emit = defineEmits(["update:modelValue"]);
 
-const { pinInfo, setPinInfo, cachePinHash } = useSessionLock();
+const { pinInfo, setPinInfo, cachePinHash, isLocked } = useSessionLock();
 const { showSuccess } = useToast();
 
 const hasPin = computed(() => pinInfo.value.hasPin);
@@ -146,6 +146,11 @@ watch(
 		firstInputRef.value?.focus();
 	},
 );
+
+// Closed when the screen locks: it draws above the lock screen, and a PIN could be set there to unlock it
+watch(isLocked, (locked) => {
+	if (locked && props.modelValue) emit("update:modelValue", false);
+});
 
 onBeforeUnmount(() => window.removeEventListener("keydown", onKeydown, true));
 

@@ -175,7 +175,7 @@ function readPinInfo() {
 	try {
 		const data = JSON.parse(localStorage.getItem(PIN_INFO_KEY) || "null");
 		const user = getCurrentUserId();
-		if (data && (!user || data.user === user)) {
+		if (data && user && data.user === user) {
 			return { hasPin: Boolean(data.has_pin), length: data.length || DEFAULT_PIN_LENGTH };
 		}
 	} catch {
@@ -314,6 +314,7 @@ function lock() {
 
 	isLocked.value = true;
 	lockedUser.value = getUserInfo();
+	// The user may not have been known when the module loaded
 	if (!pinInfo.value.hasPin) pinInfo.value = readPinInfo();
 
 	persistLock(lockedUser.value);
@@ -423,8 +424,13 @@ async function unlock(password, kind = "password") {
 			return { success: true };
 		}
 
-		// The PIN was removed meanwhile: ask for the password
-		if (isPin && data?.no_pin) setPinInfo({ has_pin: false });
+		// The PIN was removed meanwhile: ask for the password (not a wrong guess)
+		if (isPin && data?.no_pin) {
+			setPinInfo({ has_pin: false });
+			isVerifying.value = false;
+			verifyError.value = data.message || "";
+			return { success: false };
+		}
 
 		// Wrong password — backend returns { verified: false, message: "..." }
 		recordFailedAttempt();
