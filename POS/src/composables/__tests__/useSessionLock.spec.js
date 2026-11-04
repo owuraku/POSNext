@@ -48,3 +48,30 @@ describe("useSessionLock without Web Crypto (dev mode over plain http)", () => {
 		await expect(cachePasswordHashFromLogin("secret")).resolves.toBeUndefined()
 	})
 })
+
+describe("useSessionLock PIN unlock", () => {
+	afterEach(() => {
+		localStorage.clear()
+		useSessionLock().clearLock()
+	})
+
+	it("shows the server's reason a PIN was refused", async () => {
+		const { call } = await import("@/utils/apiWrapper")
+		call.mockResolvedValueOnce({ verified: false, message: "Too many wrong PINs" })
+		const { unlock, verifyError } = useSessionLock()
+
+		await expect(unlock("2580", "pin")).resolves.toEqual({ success: false })
+		expect(call).toHaveBeenLastCalledWith("pos_next.api.auth.verify_session_pin", { pin: "2580" })
+		expect(verifyError.value).toBe("Too many wrong PINs")
+	})
+
+	it("falls back to the password when the user no longer has a PIN", async () => {
+		const { call } = await import("@/utils/apiWrapper")
+		call.mockResolvedValueOnce({ verified: false, no_pin: true, message: "No PIN" })
+		const { unlock, setPinInfo, pinInfo } = useSessionLock()
+		setPinInfo({ has_pin: true, length: 4 })
+
+		await unlock("2580", "pin")
+		expect(pinInfo.value.hasPin).toBe(false)
+	})
+})

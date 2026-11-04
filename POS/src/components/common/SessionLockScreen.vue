@@ -58,8 +58,63 @@
 							</div>
 						</div>
 
+						<!-- PIN Form: the user's PIN, when they have one -->
+						<form v-if="usePin" @submit.prevent="handleUnlock" class="space-y-4">
+							<div>
+								<label
+									class="block text-sm font-medium text-gray-700 mb-1.5 text-center"
+								>
+									{{ __("Enter your PIN") }}
+								</label>
+								<input
+									ref="pinInputRef"
+									v-model="pin"
+									type="password"
+									inputmode="numeric"
+									autocomplete="off"
+									:maxlength="pinInfo.length"
+									:placeholder="'•'.repeat(pinInfo.length)"
+									:disabled="isVerifying"
+									@input="onPinInput"
+									class="block w-full rounded-lg border px-3 py-3 text-center text-2xl tracking-[0.5em] transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50"
+									:class="
+										verifyError
+											? 'border-red-400 bg-red-50'
+											: 'border-gray-300'
+									"
+								/>
+								<p
+									v-if="verifyError"
+									class="mt-1.5 text-sm text-red-600 text-center"
+								>
+									{{ verifyError }}
+								</p>
+							</div>
+							<button
+								type="submit"
+								:disabled="pin.length !== pinInfo.length || isVerifying"
+								class="w-full px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm rounded-lg shadow-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+							>
+								<span
+									v-if="isVerifying"
+									class="flex items-center justify-center gap-2"
+								>
+									<FeatherIcon name="loader" class="h-4 w-4 animate-spin" />
+									{{ __("Verifying...") }}
+								</span>
+								<span v-else>{{ __("Unlock") }}</span>
+							</button>
+							<button
+								type="button"
+								@click="switchMode(false)"
+								class="w-full text-center text-xs text-gray-500 hover:text-gray-700 underline"
+							>
+								{{ __("Use password instead") }}
+							</button>
+						</form>
+
 						<!-- Password Form -->
-						<form @submit.prevent="handleUnlock" class="space-y-4">
+						<form v-else @submit.prevent="handleUnlock" class="space-y-4">
 							<div>
 								<label class="block text-sm font-medium text-gray-700 mb-1.5">
 									{{ __("Password") }}
@@ -119,6 +174,14 @@
 								</span>
 								<span v-else>{{ __("Unlock") }}</span>
 							</button>
+							<button
+								v-if="pinInfo.hasPin"
+								type="button"
+								@click="switchMode(true)"
+								class="w-full text-center text-xs text-gray-500 hover:text-gray-700 underline"
+							>
+								{{ __("Use PIN instead") }}
+							</button>
 						</form>
 
 						<!-- Divider -->
@@ -147,34 +210,59 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick } from "vue";
+import { computed, ref, watch, nextTick } from "vue";
 import { FeatherIcon } from "frappe-ui";
 import { useSessionLock } from "@/composables/useSessionLock";
 import { useOfflineStatus } from "@/composables/useOfflineStatus";
 import { session } from "@/data/session";
 import { cleanupUserSession } from "@/utils/sessionCleanup";
 
-const { isLocked, isVerifying, verifyError, lockedUser, unlock } = useSessionLock();
+const { isLocked, isVerifying, verifyError, lockedUser, unlock, pinInfo, clearVerifyError } =
+	useSessionLock();
 const { isOffline } = useOfflineStatus();
 
 const password = ref("");
 const showPassword = ref(false);
 const passwordInputRef = ref(null);
+const pin = ref("");
+const pinInputRef = ref(null);
+// The PIN when the user has one; the password is always there to fall back on
+const choosePin = ref(true);
+const usePin = computed(() => pinInfo.value.hasPin && choosePin.value);
 
-// Auto-focus password input when locked
+async function focusInput() {
+	await nextTick();
+	(usePin.value ? pinInputRef : passwordInputRef).value?.focus();
+}
+
+// Auto-focus the PIN (or password) input when locked
 watch(isLocked, async (locked) => {
 	if (locked) {
 		password.value = "";
+		pin.value = "";
 		showPassword.value = false;
-		await nextTick();
-		passwordInputRef.value?.focus();
+		choosePin.value = true;
+		await focusInput();
 	}
 });
 
-async function handleUnlock() {
-	if (!password.value || isVerifying.value) return;
+function switchMode(toPin) {
+	choosePin.value = toPin;
+	clearVerifyError();
+	focusInput();
+}
 
-	const result = await unlock(password.value);
+// Digits only; unlocks on its own once the PIN is complete
+function onPinInput() {
+	pin.value = pin.value.replace(/\D/g, "").slice(0, pinInfo.value.length);
+	if (pin.value.length === pinInfo.value.length) handleUnlock();
+}
+
+async function handleUnlock() {
+	const secret = usePin.value ? pin.value : password.value;
+	if (!secret || isVerifying.value) return;
+
+	const result = await unlock(secret, usePin.value ? "pin" : "password");
 
 	if (result.sessionExpired) {
 		// Session expired — full logout
@@ -184,10 +272,10 @@ async function handleUnlock() {
 	}
 
 	if (!result.success) {
-		// Wrong password — clear and re-focus
+		// Wrong PIN or password — clear and re-focus
 		password.value = "";
-		await nextTick();
-		passwordInputRef.value?.focus();
+		pin.value = "";
+		await focusInput();
 	}
 }
 
