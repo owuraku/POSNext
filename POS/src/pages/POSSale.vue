@@ -1188,6 +1188,7 @@ import InvoiceManagement from "@/components/invoices/InvoiceManagement.vue";
 import InvoiceDetailDialog from "@/components/invoices/InvoiceDetailDialog.vue";
 import { useRealtimeStock } from "@/composables/useRealtimeStock";
 import { useSessionLock } from "@/composables/useSessionLock";
+import { updateReady } from "@/utils/appUpdate";
 import { useGlobalShortcuts } from "@/composables/useKeyboardShortcuts";
 import { getDistinctUoms } from "@/utils/itemUoms";
 import { usePOSEvents } from "@/composables/usePOSEvents";
@@ -1257,6 +1258,25 @@ const {
 	setPinInfo,
 } = useSessionLock();
 const showSetLockPin = ref(false);
+
+// A new version was installed while the POS was open: reload once the till is free (no sale in the cart, no
+// payment going through, no dialog open), so it doesn't keep running old code all day
+let updateTimer = null;
+function reloadIfTillFree() {
+	const free =
+		cartStore.invoiceItems.length === 0 &&
+		!cartStore.isSubmitting &&
+		!uiStore.showPaymentDialog &&
+		// (The install-the-app banner is a "dialog" too, but stays up)
+		!document.querySelector('[role="dialog"]:not([aria-labelledby="install-banner-title"])');
+	if (free) window.location.reload();
+}
+watch(updateReady, (ready) => {
+	if (!ready || updateTimer) return;
+	reloadIfTillFree();
+	updateTimer = setInterval(reloadIfTillFree, 5000);
+});
+onUnmounted(() => clearInterval(updateTimer));
 
 // POS Events system
 const {
