@@ -22,6 +22,7 @@ import {
 	getCSRFTokenFromCookie,
 	onCSRFTokenRefresh,
 } from "./utils/csrf";
+import { watchForUpdates } from "./utils/appUpdate";
 import { logger } from "./utils/logger";
 import { offlineWorker } from "./utils/offline/workerClient";
 import translationPlugin from "./utils/translation";
@@ -60,6 +61,8 @@ if ("serviceWorker" in navigator) {
 				.register("/pos-sw.js", { scope: "/pos" })
 				.then(async (reg) => {
 					log.info("Service Worker registered", reg);
+					// After an update the open POS reloads once the till is free (POSSale)
+					watchForUpdates(reg);
 					// Drop the old worker registered under the assets scope
 					for (const old of await navigator.serviceWorker.getRegistrations()) {
 						if (old.scope.endsWith("/assets/pos_next/pos/")) old.unregister();
