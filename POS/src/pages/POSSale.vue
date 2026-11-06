@@ -1260,8 +1260,14 @@ const {
 const showSetLockPin = ref(false);
 
 // A new version was installed while the POS was open: reload once the till is free (no sale in the cart, no
-// payment going through, no dialog open), so it doesn't keep running old code all day
+// payment going through, no dialog open) and has been left alone for a while (a receipt printing, the next
+// customer being started), so it doesn't keep running old code all day
+const UPDATE_IDLE_MS = 30 * 1000;
 let updateTimer = null;
+let lastTouched = Date.now();
+const noteTouched = () => {
+	lastTouched = Date.now();
+};
 function reloadIfTillFree() {
 	const free =
 		cartStore.invoiceItems.length === 0 &&
@@ -1269,14 +1275,18 @@ function reloadIfTillFree() {
 		!uiStore.showPaymentDialog &&
 		// (The install-the-app banner is a "dialog" too, but stays up)
 		!document.querySelector('[role="dialog"]:not([aria-labelledby="install-banner-title"])');
-	if (free) window.location.reload();
+	if (!free) noteTouched();
+	else if (Date.now() - lastTouched >= UPDATE_IDLE_MS) window.location.reload();
 }
 watch(updateReady, (ready) => {
 	if (!ready || updateTimer) return;
-	reloadIfTillFree();
+	for (const type of ["pointerdown", "keydown"]) window.addEventListener(type, noteTouched, { capture: true, passive: true });
 	updateTimer = setInterval(reloadIfTillFree, 5000);
 });
-onUnmounted(() => clearInterval(updateTimer));
+onUnmounted(() => {
+	clearInterval(updateTimer);
+	for (const type of ["pointerdown", "keydown"]) window.removeEventListener(type, noteTouched, { capture: true });
+});
 
 // POS Events system
 const {
