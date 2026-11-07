@@ -383,15 +383,27 @@ function buildReceiptDocumentHTML(invoiceData, { includeControls = false } = {})
  * Resolve print format & letterhead from a POS Profile.
  * Returns defaults when the profile lookup fails so callers always get a value.
  */
+// A POS Profile's print format and letterhead, kept for a few minutes: read before every print otherwise
+const profilePrintSettings = new Map();
+const PROFILE_SETTINGS_TTL_MS = 5 * 60 * 1000;
+
 async function resolvePrintSettings(posProfile, printFormat, letterhead) {
 	if (printFormat) return { printFormat, letterhead };
 
 	if (posProfile) {
 		try {
-			const doc = await call("frappe.client.get", {
-				doctype: "POS Profile",
-				name: posProfile,
-			});
+			let cached = profilePrintSettings.get(posProfile);
+			if (!cached || Date.now() - cached.at > PROFILE_SETTINGS_TTL_MS) {
+				// Just the two fields, not the whole profile with its tables (call() returns the message itself)
+				const values = await call("frappe.client.get_value", {
+					doctype: "POS Profile",
+					filters: posProfile,
+					fieldname: ["print_format", "letter_head"],
+				});
+				cached = { doc: values, at: Date.now() };
+				if (values) profilePrintSettings.set(posProfile, cached);
+			}
+			const doc = cached.doc;
 			if (doc) {
 				return {
 					printFormat: doc.print_format || DEFAULT_PRINT_FORMAT,
@@ -486,6 +498,7 @@ function printWhenLoaded(printWindow) {
  * Falls back to the hardcoded receipt template if the popup is blocked.
  */
 export async function printInvoice(invoiceData, printFormat = null, letterhead = null) {
+	let printWindow = null;
 	try {
 		if (!invoiceData?.name) throw new Error("Invalid invoice data");
 
@@ -502,7 +515,32 @@ export async function printInvoice(invoiceData, printFormat = null, letterhead =
 		}
 
 		const doctype = invoiceData.doctype || "Sales Invoice";
-		const format = printFormat || DEFAULT_PRINT_FORMAT;
+		// Opened now, while the browser still counts the tap that printed (a popup opened after waiting on the
+		// server can be blocked); the receipt goes into it once its format is known
+		printWindow = window.open("", "_blank", "width=800,height=600");
+		if (!printWindow) {
+			throw new Error("Popup blocked — check your browser settings.");
+		}
+		// The POS Profile's print format (e.g. the shop's own receipt), as printInvoiceByName uses, not always the
+		// built-in one
+		let posProfile = invoiceData.pos_profile;
+		if (!posProfile && !printFormat) {
+			// A sale from a list (e.g. Invoice History) may not carry it: the saved invoice's
+			try {
+				// call() returns the server's message itself
+				const values = await call("frappe.client.get_value", {
+					doctype,
+					filters: invoiceData.name,
+					fieldname: "pos_profile",
+				});
+				posProfile = values?.pos_profile;
+			} catch (err) {
+				log.warn("Could not read the invoice's POS Profile:", err);
+			}
+		}
+		const settings = await resolvePrintSettings(posProfile, printFormat, letterhead);
+		const format = settings.printFormat || DEFAULT_PRINT_FORMAT;
+		letterhead = settings.letterhead;
 
 		const params = new URLSearchParams({
 			doctype,
@@ -515,14 +553,17 @@ export async function printInvoice(invoiceData, printFormat = null, letterhead =
 		});
 		if (letterhead) params.append("letterhead", letterhead);
 
-		const printWindow = window.open(`/printview?${params}`, "_blank", "width=800,height=600");
-		if (!printWindow) {
-			throw new Error("Popup blocked — check your browser settings.");
-		}
+		printWindow.location.href = `/printview?${params}`;
 		printWhenLoaded(printWindow);
 		return true;
 	} catch (error) {
 		log.error("Browser print failed:", error);
+		// The window opened for the receipt, still blank: not left behind the fallback's
+		try {
+			if (printWindow && !printWindow.closed && printWindow.location.href === "about:blank") printWindow.close();
+		} catch (closeError) {
+			// Ignore
+		}
 		if (isLocalOnlyInvoiceName(invoiceData?.name) && !(invoiceData.items?.length > 0)) {
 			throw error;
 		}
