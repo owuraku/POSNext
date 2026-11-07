@@ -143,7 +143,7 @@ const RECEIPT_STYLES = `
 	.offline-badge { text-align: center; font-size: 10px; font-weight: bold; border: 1px dashed #000; padding: 3px; margin: 6px 0; }
 	.footer { margin-top: 14px; font-size: 10px; line-height: 1.4; }
 	@media print {
-		@page { size: 80mm auto; margin: 0; }
+		@page { margin: 0; }
 		body { width: 100%; margin: 0; }
 		.receipt-container { width: 100%; }
 		.no-print { display: none; }
@@ -410,9 +410,79 @@ async function resolvePrintSettings(posProfile, printFormat, letterhead) {
 // Browser printing (opens /printview in a new window)
 // ============================================================================
 
+// Receipt paper: an 80mm roll
+const RECEIPT_WIDTH_MM = 80;
+// The widest content still taken for a receipt (a full-page invoice format is left to the printer's paper)
+const RECEIPT_MAX_CONTENT_MM = 100;
+const PX_PER_MM = 96 / 25.4;
+
+/**
+ * Print a receipt on a page as wide as the roll and as long as the receipt, then print. Without a page size
+ * Chrome's own print dialog lays the page out on its paper setting (e.g. A4) and the printer shrinks it onto the
+ * roll, using half its width; the system dialog took the printer's paper. ("80mm auto" isn't valid CSS: the
+ * length is measured.) Content wider than a receipt keeps the printer's paper.
+ */
+export function printOnReceiptPage(printWindow) {
+	try {
+		const doc = printWindow.document;
+		const receipt =
+			doc.querySelector(".receipt-container") || doc.querySelector(".print-format") || doc.body;
+		const box = receipt.getBoundingClientRect();
+		if (box.width / PX_PER_MM <= RECEIPT_MAX_CONTENT_MM && !doc.getElementById("pos-receipt-page")) {
+			// Its content's length, not the element's: Frappe's print page has the height of an A4 sheet at least.
+			// A little extra: the receipt is a touch wider on paper than on screen, so it may wrap less
+			let bottom = box.top;
+			for (const child of receipt.children) bottom = Math.max(bottom, child.getBoundingClientRect().bottom);
+			const contentPx = (bottom > box.top ? bottom - box.top : receipt.scrollHeight) + 16;
+			const heightMm = Math.ceil(contentPx / PX_PER_MM) + 6;
+			const style = doc.createElement("style");
+			style.id = "pos-receipt-page";
+			style.textContent = `@page { size: ${RECEIPT_WIDTH_MM}mm ${heightMm}mm; margin: 0; }`;
+			doc.head.appendChild(style);
+		}
+	} catch (error) {
+		log.warn("Could not size the receipt page", error);
+	}
+	printWindow.focus();
+	printWindow.print();
+}
+
+/**
+ * Once the window's page has loaded (and its fonts), print it on a receipt-sized page, then close the window, as
+ * Frappe's own trigger_print did (on afterprint, and after 5 seconds where printing doesn't wait, e.g. mobiles).
+ * A slow page is waited for as long as the window stays open, up to 2 minutes.
+ */
+function printWhenLoaded(printWindow) {
+	const started = Date.now();
+	const tick = async () => {
+		if (printWindow.closed) return;
+		let ready = false;
+		try {
+			ready =
+				printWindow.location.href !== "about:blank" && printWindow.document.readyState === "complete";
+		} catch (error) {
+			ready = false;
+		}
+		if (!ready) {
+			if (Date.now() - started < 120000) setTimeout(tick, 150);
+			return;
+		}
+		try {
+			await printWindow.document.fonts?.ready;
+		} catch (error) {
+			// Printed with what has loaded
+		}
+		const close = () => setTimeout(() => printWindow.closed || printWindow.close(), 300);
+		printWindow.addEventListener("afterprint", close, { once: true });
+		printOnReceiptPage(printWindow);
+		setTimeout(() => printWindow.closed || printWindow.close(), 5000);
+	};
+	setTimeout(tick, 150);
+}
+
 /**
  * Open Frappe's /printview in a new browser window.
- * The page includes trigger_print=1 so the OS print dialog appears automatically.
+ * Printed from here once it has loaded, on a page the size of the receipt (printWhenLoaded).
  * Falls back to the hardcoded receipt template if the popup is blocked.
  */
 export async function printInvoice(invoiceData, printFormat = null, letterhead = null) {
@@ -440,7 +510,7 @@ export async function printInvoice(invoiceData, printFormat = null, letterhead =
 			format,
 			no_letterhead: letterhead ? 0 : 1,
 			_lang: "en",
-			trigger_print: 1,
+			// Printed from here once loaded (printWhenLoaded), on a page the size of the receipt
 			_t: Date.now(),
 		});
 		if (letterhead) params.append("letterhead", letterhead);
@@ -449,6 +519,7 @@ export async function printInvoice(invoiceData, printFormat = null, letterhead =
 		if (!printWindow) {
 			throw new Error("Popup blocked — check your browser settings.");
 		}
+		printWhenLoaded(printWindow);
 		return true;
 	} catch (error) {
 		log.error("Browser print failed:", error);
@@ -609,7 +680,7 @@ export function printInvoiceCustom(invoiceData) {
 	printWindow.document.write(printContent);
 	printWindow.document.close();
 	printWindow.onload = () => {
-		setTimeout(() => printWindow.print(), 250);
+		setTimeout(() => printOnReceiptPage(printWindow), 250);
 	};
 	flagOfflineInvoicePrinted(invoiceData?.name);
 	return true;
