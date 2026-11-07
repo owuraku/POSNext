@@ -447,7 +447,11 @@ export function printOnReceiptPage(printWindow) {
 	printWindow.print();
 }
 
-/** Once the window's page has loaded (and its fonts), print it on a receipt-sized page. */
+/**
+ * Once the window's page has loaded (and its fonts), print it on a receipt-sized page, then close the window, as
+ * Frappe's own trigger_print did (on afterprint, and after 5 seconds where printing doesn't wait, e.g. mobiles).
+ * A slow page is waited for as long as the window stays open, up to 2 minutes.
+ */
 function printWhenLoaded(printWindow) {
 	const started = Date.now();
 	const tick = async () => {
@@ -460,7 +464,7 @@ function printWhenLoaded(printWindow) {
 			ready = false;
 		}
 		if (!ready) {
-			if (Date.now() - started < 20000) setTimeout(tick, 150);
+			if (Date.now() - started < 120000) setTimeout(tick, 150);
 			return;
 		}
 		try {
@@ -468,7 +472,10 @@ function printWhenLoaded(printWindow) {
 		} catch (error) {
 			// Printed with what has loaded
 		}
+		const close = () => setTimeout(() => printWindow.closed || printWindow.close(), 300);
+		printWindow.addEventListener("afterprint", close, { once: true });
 		printOnReceiptPage(printWindow);
+		setTimeout(() => printWindow.closed || printWindow.close(), 5000);
 	};
 	setTimeout(tick, 150);
 }
