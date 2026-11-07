@@ -21,6 +21,11 @@ describe("uomRate", () => {
 		expect(uomRate({ stock_uom: "Piece", conversion_factor: 1, price_list_rate: 50 }, "Set (Male)", 6)).toBe(300)
 	})
 
+	it("comes out without floating-point noise", () => {
+		const set = { stock_uom: "Piece", uom: "Set of 3", conversion_factor: 3, price_list_rate: 100 }
+		expect(uomRate(set, "Set (Male)", 6)).toBe(200)
+	})
+
 	it("works from the price of the item's current unit (a set back to pieces)", () => {
 		const set = { stock_uom: "Piece", uom: "Set (Male)", conversion_factor: 6, price_list_rate: 300, rate: 300 }
 		expect(uomRate(set, "Piece", 1)).toBe(50)

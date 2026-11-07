@@ -16,6 +16,8 @@ export function uomRate(item, uom, conversionFactor) {
 	if (own > 0) return own;
 	const stockPrice = Number(item?.uom_prices?.[item?.stock_uom]);
 	const current = Number(item?.price_list_rate) || Number(item?.rate) || 0;
-	const perStockUnit = stockPrice > 0 ? stockPrice : current / (Number(item?.conversion_factor) || 1);
-	return perStockUnit * (Number(conversionFactor) || 1);
+	const perStockUnit =
+		stockPrice > 0 ? stockPrice : current / (Number(item?.conversion_factor) || 1);
+	// Without floating-point noise (100 for 3, times 6, is 200, not 199.99999999999997)
+	return Math.round(perStockUnit * (Number(conversionFactor) || 1) * 1e6) / 1e6;
 }

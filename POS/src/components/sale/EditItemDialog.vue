@@ -986,8 +986,7 @@ async function getRateForUom(uom) {
 
 	// Otherwise the unit's own price, else a stock unit's times the conversion factor (uomPricing.js); a stored 0
 	// is no price
-	const conversion = localItem.value.item_uoms?.find((u) => u.uom === uom)?.conversion_factor || 1;
-	return uomRate({ ...localItem.value, rate: localItem.value.rate || localRate.value }, uom, conversion);
+	return uomRate({ ...localItem.value, rate: localItem.value.rate || localRate.value }, uom, getConversionFactorForUom(uom));
 }
 
 async function handleUomChange(newUom) {
