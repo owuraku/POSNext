@@ -9,6 +9,8 @@
 	--z-dialog-content: 500;
 	--z-dropdown: 10000;
 	--z-authorization: 10010;
+	/* The screen lock covers everything, approval dialogs included */
+	--z-session-lock: 10050;
 
 	/* POS visual tokens. Colour carries meaning only: action is the single primary,
 	   saving marks discounts and gifts, caution marks low stock, near expiry and credit,
