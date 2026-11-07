@@ -1189,6 +1189,7 @@ import InvoiceDetailDialog from "@/components/invoices/InvoiceDetailDialog.vue";
 import { useRealtimeStock } from "@/composables/useRealtimeStock";
 import { useSessionLock } from "@/composables/useSessionLock";
 import { updateReady } from "@/utils/appUpdate";
+import { uomRate } from "@/utils/uomPricing";
 import { useGlobalShortcuts } from "@/composables/useKeyboardShortcuts";
 import { getDistinctUoms } from "@/utils/itemUoms";
 import { usePOSEvents } from "@/composables/usePOSEvents";
@@ -2132,9 +2133,13 @@ function handleItemSelected(item, autoAdd = false) {
 		try {
 			// Check if item has resolved barcode data (weighted/priced)
 			if (item.resolved_qty && item.resolved_barcode_type) {
-				// Get the unit price for the resolved UOM from uom_prices, or fall back to item rate
+				// The resolved unit's price: its own, else a stock unit's times its conversion factor
 				const resolvedUom = item.resolved_uom || item.uom;
-				const unitRate = item.uom_prices?.[resolvedUom] || item.rate;
+				const resolvedConversion =
+					item.item_uoms?.find((u) => u.uom === resolvedUom)?.conversion_factor ||
+					(resolvedUom === item.uom ? item.conversion_factor : 1) ||
+					1;
+				const unitRate = uomRate(item, resolvedUom, resolvedConversion);
 
 				const resolvedItem = {
 					...item,
