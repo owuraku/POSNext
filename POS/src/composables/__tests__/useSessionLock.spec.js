@@ -109,6 +109,24 @@ describe("useSessionLock locks only after the timeout without activity", () => {
 		expect(lock.isLocked.value).toBe(true)
 	})
 
+	it("doesn't lock right after logging in, though the session before was long ago", async () => {
+		localStorage.setItem("pos_session_last_active", JSON.stringify({ user: null, time: Date.now() - 12 * 60 * MINUTE }))
+		vi.useFakeTimers()
+		const lock = useSessionLock()
+		vi.stubGlobal("crypto", { getRandomValues: (a) => a })
+		await lock.cachePasswordHashFromLogin("secret")
+		vi.unstubAllGlobals()
+		lock.configure({ enabled: true, timeoutMinutes: 5 })
+		lock.startActivityTracking()
+		expect(lock.isLocked.value).toBe(false)
+	})
+
+	it("forgets the last activity on logging out", () => {
+		localStorage.setItem("pos_session_last_active", JSON.stringify({ user: null, time: Date.now() - 10 * MINUTE }))
+		useSessionLock().clearLock()
+		expect(localStorage.getItem("pos_session_last_active")).toBe(null)
+	})
+
 	it("counts a timeout set after tracking started (settings loaded late) from the last activity", () => {
 		localStorage.setItem("pos_session_last_active", JSON.stringify({ user: null, time: Date.now() - 3 * MINUTE }))
 		const lock = start(5)

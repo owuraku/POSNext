@@ -64,7 +64,9 @@ function persistLastActive(time) {
 function readLastActive() {
 	try {
 		const data = JSON.parse(localStorage.getItem(LAST_ACTIVE_KEY) || "null");
-		if (data && data.user === getCurrentUserId() && Number.isFinite(data.time)) return data.time;
+		// Another user's time is theirs; with the user not known yet, it is the till's (a long-idle till still locks)
+		const user = getCurrentUserId();
+		if (data && (!user || data.user === user) && Number.isFinite(data.time)) return data.time;
 	} catch {
 		// Ignore
 	}
@@ -228,6 +230,9 @@ async function cachePinHash(pin) {
 }
 
 async function cachePasswordHashFromLogin(password) {
+	// Logging in is activity: idleness isn't counted from the session before
+	lastActivityTime = Date.now();
+	persistLastActive(lastActivityTime);
 	// Web Crypto exists only in secure contexts; plain http reaches here only in dev mode (see canLogin)
 	if (!globalThis.crypto?.subtle) return;
 	const user = getCurrentUserId();
@@ -517,6 +522,12 @@ function clearLock() {
 	clearPersistedLock();
 	clearCachedPasswordHash();
 	clearAttemptCounter();
+	// Logged out: the next session starts its own count
+	try {
+		localStorage.removeItem(LAST_ACTIVE_KEY);
+	} catch {
+		// Ignore
+	}
 }
 
 function handlePageHide() {
