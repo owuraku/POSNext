@@ -49,6 +49,30 @@ function clearPersistedLock() {
 	}
 }
 
+// When the POS was last used, kept for the next time it opens (a reload, the browser reopened): it opens locked
+// only when that was the lock's timeout ago or more
+const LAST_ACTIVE_KEY = "pos_session_last_active";
+
+function persistLastActive(time) {
+	try {
+		localStorage.setItem(LAST_ACTIVE_KEY, JSON.stringify({ user: getCurrentUserId(), time }));
+	} catch {
+		// Ignore
+	}
+}
+
+function readLastActive() {
+	try {
+		const data = JSON.parse(localStorage.getItem(LAST_ACTIVE_KEY) || "null");
+		// Another user's time is theirs; with the user not known yet, it is the till's (a long-idle till still locks)
+		const user = getCurrentUserId();
+		if (data && (!user || data.user === user) && Number.isFinite(data.time)) return data.time;
+	} catch {
+		// Ignore
+	}
+	return null;
+}
+
 // ---------------------------------------------------------------------------
 // Cached password hash (offline unlock fallback)
 // ---------------------------------------------------------------------------
@@ -206,6 +230,9 @@ async function cachePinHash(pin) {
 }
 
 async function cachePasswordHashFromLogin(password) {
+	// Logging in is activity: idleness isn't counted from the session before
+	lastActivityTime = Date.now();
+	persistLastActive(lastActivityTime);
 	// Web Crypto exists only in secure contexts; plain http reaches here only in dev mode (see canLogin)
 	if (!globalThis.crypto?.subtle) return;
 	const user = getCurrentUserId();
@@ -276,7 +303,19 @@ let inactivityTimer = null;
 let lastActivityTime = 0;
 let listenersAttached = false;
 
-const ACTIVITY_EVENTS = ["mousedown", "mousemove", "keydown", "touchstart", "scroll", "click"];
+// Anything the cashier does: taps (pointerdown covers touch screens), typing (input: phone keyboards don't always
+// send keydown) and scrolling
+const ACTIVITY_EVENTS = [
+	"pointerdown",
+	"mousedown",
+	"mousemove",
+	"keydown",
+	"input",
+	"touchstart",
+	"scroll",
+	"wheel",
+	"click",
+];
 
 function getUserInfo() {
 	return {
@@ -325,12 +364,22 @@ function lock() {
 	}
 }
 
+/** Lock now if the POS has gone unused for the timeout, else when it will have. */
+function lockWhenIdle() {
+	if (inactivityTimer) clearTimeout(inactivityTimer);
+	inactivityTimer = null;
+	if (isLocked.value) return;
+	const idle = Date.now() - lastActivityTime;
+	if (idle >= lockTimeoutMs) tryLock();
+	else inactivityTimer = setTimeout(tryLock, lockTimeoutMs - idle);
+}
+
+// Leaving the POS (another tab or app, a print or payment window) is no activity, and doesn't lock it by itself:
+// coming back counts the time away, and it locks only if that makes the timeout (timers may not run while away)
 function handleVisibilityChange() {
 	if (!lockEnabled) return;
-	if (document.hidden) {
-		// Lock immediately when tab loses focus
-		lock();
-	}
+	if (document.hidden) persistLastActive(lastActivityTime);
+	else lockWhenIdle();
 }
 
 function unlockSuccess() {
@@ -473,15 +522,19 @@ function clearLock() {
 	clearPersistedLock();
 	clearCachedPasswordHash();
 	clearAttemptCounter();
+	// Logged out: the next session starts its own count
+	try {
+		localStorage.removeItem(LAST_ACTIVE_KEY);
+	} catch {
+		// Ignore
+	}
 }
 
 function handlePageHide() {
 	if (!lockEnabled) return;
-	// Persist lock state on browser close / navigate away so the session
-	// starts locked on reload even if it wasn't locked at the moment of closing
-	if (!isLocked.value) {
-		persistLock(getUserInfo());
-	}
+	// A locked POS stays locked (kept when it locked); otherwise it opens again unlocked unless it has gone unused
+	// for the timeout by then (startActivityTracking)
+	if (!isLocked.value) persistLastActive(lastActivityTime);
 }
 
 function startActivityTracking() {
@@ -495,8 +548,9 @@ function startActivityTracking() {
 	window.addEventListener("pagehide", handlePageHide);
 
 	listenersAttached = true;
-	lastActivityTime = Date.now();
-	inactivityTimer = setTimeout(tryLock, lockTimeoutMs);
+	// Opened again (a reload, the browser reopened): counted from when it was last used
+	lastActivityTime = readLastActive() ?? Date.now();
+	lockWhenIdle();
 }
 
 function stopActivityTracking() {
@@ -536,12 +590,9 @@ function configure({ enabled, timeoutMinutes }) {
 		}
 		clearPersistedLock();
 	} else if (listenersAttached) {
-		// Already tracking — restart timer with new timeout
-		if (inactivityTimer) {
-			clearTimeout(inactivityTimer);
-		}
-		lastActivityTime = Date.now();
-		inactivityTimer = setTimeout(tryLock, lockTimeoutMs);
+		// Already tracking: the new timeout counts from the last activity (not from now, or a POS opened after
+		// long unused would wait another full timeout)
+		lockWhenIdle();
 	}
 }
 

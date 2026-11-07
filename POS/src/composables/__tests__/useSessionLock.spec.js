@@ -38,6 +38,104 @@ describe("useSessionLock idle timer", () => {
 	})
 })
 
+describe("useSessionLock locks only after the timeout without activity", () => {
+	const MINUTE = 60 * 1000
+	const setHidden = (hidden) => {
+		Object.defineProperty(document, "hidden", { configurable: true, get: () => hidden })
+		document.dispatchEvent(new Event("visibilitychange"))
+	}
+
+	afterEach(() => {
+		const { stopActivityTracking, clearLock } = useSessionLock()
+		stopActivityTracking()
+		clearLock()
+		setHidden(false)
+		localStorage.clear()
+		vi.useRealTimers()
+	})
+
+	function start(timeoutMinutes = 5) {
+		vi.useFakeTimers()
+		const lock = useSessionLock()
+		lock.configure({ enabled: true, timeoutMinutes })
+		lock.startActivityTracking()
+		return lock
+	}
+
+	it("stays unlocked while being used, and locks once left alone for the timeout", () => {
+		const { isLocked } = start(5)
+		for (let i = 0; i < 4; i++) {
+			vi.advanceTimersByTime(4 * MINUTE)
+			document.dispatchEvent(new Event("pointerdown"))
+		}
+		expect(isLocked.value).toBe(false)
+		vi.advanceTimersByTime(5 * MINUTE)
+		expect(isLocked.value).toBe(true)
+	})
+
+	it("counts typing on a phone keyboard (input) as activity", () => {
+		const { isLocked } = start(5)
+		vi.advanceTimersByTime(4 * MINUTE)
+		document.dispatchEvent(new Event("input"))
+		vi.advanceTimersByTime(4 * MINUTE)
+		expect(isLocked.value).toBe(false)
+	})
+
+	it("doesn't lock on leaving the tab or app for a moment (a receipt, a payment app)", () => {
+		const { isLocked } = start(5)
+		setHidden(true)
+		expect(isLocked.value).toBe(false)
+		vi.setSystemTime(Date.now() + 1 * MINUTE)
+		setHidden(false)
+		expect(isLocked.value).toBe(false)
+	})
+
+	it("locks on coming back after the timeout away, though timers didn't run meanwhile", () => {
+		const { isLocked } = start(5)
+		setHidden(true)
+		vi.setSystemTime(Date.now() + 6 * MINUTE)
+		setHidden(false)
+		expect(isLocked.value).toBe(true)
+	})
+
+	it("opens unlocked after a reload when last used moments ago, locked when long unused", () => {
+		localStorage.setItem("pos_session_last_active", JSON.stringify({ user: null, time: Date.now() - 30 * 1000 }))
+		let lock = start(5)
+		expect(lock.isLocked.value).toBe(false)
+		lock.stopActivityTracking()
+
+		localStorage.setItem("pos_session_last_active", JSON.stringify({ user: null, time: Date.now() - 10 * MINUTE }))
+		lock = start(5)
+		expect(lock.isLocked.value).toBe(true)
+	})
+
+	it("doesn't lock right after logging in, though the session before was long ago", async () => {
+		localStorage.setItem("pos_session_last_active", JSON.stringify({ user: null, time: Date.now() - 12 * 60 * MINUTE }))
+		vi.useFakeTimers()
+		const lock = useSessionLock()
+		vi.stubGlobal("crypto", { getRandomValues: (a) => a })
+		await lock.cachePasswordHashFromLogin("secret")
+		vi.unstubAllGlobals()
+		lock.configure({ enabled: true, timeoutMinutes: 5 })
+		lock.startActivityTracking()
+		expect(lock.isLocked.value).toBe(false)
+	})
+
+	it("forgets the last activity on logging out", () => {
+		localStorage.setItem("pos_session_last_active", JSON.stringify({ user: null, time: Date.now() - 10 * MINUTE }))
+		useSessionLock().clearLock()
+		expect(localStorage.getItem("pos_session_last_active")).toBe(null)
+	})
+
+	it("counts a timeout set after tracking started (settings loaded late) from the last activity", () => {
+		localStorage.setItem("pos_session_last_active", JSON.stringify({ user: null, time: Date.now() - 3 * MINUTE }))
+		const lock = start(5)
+		expect(lock.isLocked.value).toBe(false)
+		lock.configure({ enabled: true, timeoutMinutes: 2 })
+		expect(lock.isLocked.value).toBe(true)
+	})
+})
+
 describe("useSessionLock without Web Crypto (dev mode over plain http)", () => {
 	afterEach(() => vi.unstubAllGlobals())
 
