@@ -394,6 +394,7 @@
 </template>
 
 <script setup>
+import { uomRate } from "@/utils/uomPricing";
 import { DEFAULT_CURRENCY, formatCurrency as formatCurrencyUtil } from "@/utils/currency";
 import { Dialog } from "frappe-ui";
 import { createResource } from "frappe-ui";
@@ -723,16 +724,8 @@ function buildUomOptions() {
 
 function getUomPrice(uom, conversionFactor) {
 	if (!props.item) return 0;
-
-	// Check if we have UOM-specific prices
-	if (props.item.uom_prices && props.item.uom_prices[uom]) {
-		return props.item.uom_prices[uom];
-	}
-
-	// Calculate price based on conversion factor
-	// If 1 Gram = 0.001 Kg, then price per Gram = price per Kg * 0.001
-	const baseRate = props.item.rate || 0;
-	return baseRate * conversionFactor;
+	// The unit's own price, else a stock unit's times the conversion factor (uomPricing.js)
+	return uomRate(props.item, uom, conversionFactor);
 }
 
 function selectAttribute(attributeName, value) {

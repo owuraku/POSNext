@@ -1,4 +1,5 @@
 import { promoApi } from "@/utils/promoApi";
+import { uomRate } from "@/utils/uomPricing";
 import { createResource } from "frappe-ui";
 import { computed, ref, toRaw } from "vue";
 import { isOffline, getCachedItem } from "@/utils/offline";
@@ -118,9 +119,12 @@ export function useInvoice() {
 	 * @param {string} uom - Target UOM
 	 * @param {number} conversionFactor - UOM conversion factor
 	 * @param {number} qty - Quantity for pricing
+	 * @param {number} [fromConversion] - The conversion factor of the unit the item's price is for, when the item
+	 *   already carries the new unit's (a cart row switching units)
 	 * @returns {Promise<{rate: number, price_list_rate: number}>}
 	 */
-	async function resolveUomPricing(item, uom, conversionFactor, qty) {
+	async function resolveUomPricing(item, uom, conversionFactor, qty, fromConversion) {
+		const priced = fromConversion ? { ...item, conversion_factor: fromConversion } : item;
 		// When online, fetch server pricing for customer-specific rates
 		if (!isOffline()) {
 			try {
@@ -131,10 +135,13 @@ export function useInvoice() {
 					qty,
 					uom,
 				});
-				return {
-					rate: itemDetails.price_list_rate || itemDetails.rate,
-					price_list_rate: itemDetails.price_list_rate,
-				};
+				const serverRate = Number(itemDetails?.price_list_rate) || Number(itemDetails?.rate) || 0;
+				// No price for the unit on the server (none of its own, or one of 0): from a stock unit's
+				if (serverRate > 0) {
+					return { rate: serverRate, price_list_rate: Number(itemDetails.price_list_rate) || serverRate };
+				}
+				const rate = uomRate(priced, uom, conversionFactor);
+				return { rate, price_list_rate: rate };
 			} catch (err) {
 				log.warn("Server UOM pricing unavailable, resolving from IndexedDB", err);
 			}
@@ -144,15 +151,8 @@ export function useInvoice() {
 		const cachedItem = await getCachedItem(item.item_code);
 		const source = cachedItem || item;
 
-		let rate;
-		if (source.uom_prices?.[uom]) {
-			rate = source.uom_prices[uom];
-		} else {
-			const baseRate = source.price_list_rate || source.rate || 0;
-			const currentConversion = source.conversion_factor || 1;
-			rate = (baseRate / currentConversion) * conversionFactor;
-		}
-
+		// The cached item knows the prices; the cart row knows its current unit's price
+		const rate = uomRate(cachedItem ? { ...priced, uom_prices: cachedItem.uom_prices || priced.uom_prices } : priced, uom, conversionFactor);
 		return { rate, price_list_rate: rate };
 	}
 

@@ -1807,7 +1807,7 @@ export const usePOSCartStore = defineStore("posCart", () => {
 			return;
 		}
 
-		const pricing = await resolveUomPricing(cartItem, newUom, conversionFactor, qty);
+		const pricing = await resolveUomPricing(cartItem, newUom, conversionFactor, qty, oldConversion);
 		cartItem.rate = pricing.rate;
 		cartItem.price_list_rate = pricing.price_list_rate;
 	}

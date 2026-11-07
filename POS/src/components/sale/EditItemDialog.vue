@@ -546,6 +546,7 @@
 </template>
 
 <script setup>
+import { uomRate } from "@/utils/uomPricing";
 import { promoApi } from "@/utils/promoApi";
 import { useToast } from "@/composables/useToast";
 import { usePOSSettingsStore } from "@/stores/posSettings";
@@ -983,13 +984,9 @@ async function getRateForUom(uom) {
 		}
 	}
 
-	// Secondary source: preloaded UOM prices on item payload.
-	if (localItem.value.uom_prices?.[uom] !== undefined) {
-		return Number(localItem.value.uom_prices[uom]) || 0;
-	}
-
-	// Final fallback: keep current known item rate (no conversion-based pricing).
-	return Number(localItem.value.price_list_rate || localItem.value.rate || localRate.value || 0);
+	// Otherwise the unit's own price, else a stock unit's times the conversion factor (uomPricing.js); a stored 0
+	// is no price
+	return uomRate({ ...localItem.value, rate: localItem.value.rate || localRate.value }, uom, getConversionFactorForUom(uom));
 }
 
 async function handleUomChange(newUom) {
