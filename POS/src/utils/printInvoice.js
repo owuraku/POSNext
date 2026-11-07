@@ -502,7 +502,32 @@ export async function printInvoice(invoiceData, printFormat = null, letterhead =
 		}
 
 		const doctype = invoiceData.doctype || "Sales Invoice";
-		const format = printFormat || DEFAULT_PRINT_FORMAT;
+		// Opened now, while the browser still counts the tap that printed (a popup opened after waiting on the
+		// server can be blocked); the receipt goes into it once its format is known
+		const printWindow = window.open("", "_blank", "width=800,height=600");
+		if (!printWindow) {
+			throw new Error("Popup blocked — check your browser settings.");
+		}
+		// The POS Profile's print format (e.g. the shop's own receipt), as printInvoiceByName uses, not always the
+		// built-in one
+		let posProfile = invoiceData.pos_profile;
+		if (!posProfile && !printFormat) {
+			// A sale from a list (e.g. Invoice History) may not carry it: the saved invoice's
+			try {
+				// call() returns the server's message itself
+				const values = await call("frappe.client.get_value", {
+					doctype,
+					filters: invoiceData.name,
+					fieldname: "pos_profile",
+				});
+				posProfile = values?.pos_profile;
+			} catch (err) {
+				log.warn("Could not read the invoice's POS Profile:", err);
+			}
+		}
+		const settings = await resolvePrintSettings(posProfile, printFormat, letterhead);
+		const format = settings.printFormat || DEFAULT_PRINT_FORMAT;
+		letterhead = settings.letterhead;
 
 		const params = new URLSearchParams({
 			doctype,
@@ -515,10 +540,7 @@ export async function printInvoice(invoiceData, printFormat = null, letterhead =
 		});
 		if (letterhead) params.append("letterhead", letterhead);
 
-		const printWindow = window.open(`/printview?${params}`, "_blank", "width=800,height=600");
-		if (!printWindow) {
-			throw new Error("Popup blocked — check your browser settings.");
-		}
+		printWindow.location.href = `/printview?${params}`;
 		printWhenLoaded(printWindow);
 		return true;
 	} catch (error) {
