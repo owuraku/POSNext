@@ -1011,6 +1011,31 @@
 							__("Shift History")
 						}}</span>
 					</button>
+
+					<!-- Online Orders (the site's online shop) -->
+					<button
+						v-if="onlineOrders"
+						type="button"
+						@click="$emit('show-online-orders')"
+						class="flex flex-col items-center justify-center p-3 sm:p-4 bg-white border border-gray-200 rounded-lg hover:border-cyan-300 hover:bg-cyan-50 active:bg-cyan-100 transition-colors shadow-sm hover:shadow touch-manipulation group"
+						:title="__('Orders from the online shop')"
+					>
+						<div
+							class="w-9 h-9 sm:w-10 sm:h-10 bg-cyan-50 rounded-full flex items-center justify-center mb-2 group-hover:bg-cyan-100 transition-colors"
+						>
+							<svg class="w-5 h-5 text-cyan-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									stroke-width="2"
+									d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+								/>
+							</svg>
+						</div>
+						<span class="text-[11px] sm:text-xs font-semibold text-gray-700">{{
+							__("Online Orders")
+						}}</span>
+					</button>
 				</div>
 			</div>
 
@@ -1599,6 +1624,11 @@ const props = defineProps({
 		type: Boolean,
 		default: false,
 	},
+	// The site has an online shop: its orders open from the quick actions
+	onlineOrders: {
+		type: Boolean,
+		default: false,
+	},
 });
 
 /**
@@ -1629,6 +1659,7 @@ const emit = defineEmits([
 	"show-expense", // () - Open POS expense dialog
 	"close-shift", // () - Close current shift
 	"show-shift-history", // () - Open shift history dialog
+	"show-online-orders", // () - Open the online shop's orders
 	// "create-sales-order", // () - Create Sales Order // Removed as per instruction
 ]);
 

@@ -101,11 +101,13 @@ def check_opening_shift(user=None):
 
 
 def _shift_profile(pos_profile):
-	"""The shift's POS Profile, and whether another app records its expenses (posa_external_expense)."""
+	"""The shift's POS Profile, whether another app records its expenses (posa_external_expense), and whether the
+	site has an online shop whose orders the till can see (posa_online_orders: the Online Shop app)."""
 	from pos_next.api.expenses import external_expense_handler
 
 	profile = frappe.get_doc("POS Profile", pos_profile).as_dict()
 	profile["posa_external_expense"] = 1 if external_expense_handler(pos_profile) else 0
+	profile["posa_online_orders"] = 1 if "online_shop" in frappe.get_installed_apps() else 0
 	return profile
 
 
