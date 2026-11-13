@@ -81,6 +81,10 @@
 									<div class="flex flex-wrap justify-end gap-1">
 										<span :class="['px-2 py-0.5 rounded-full text-xs font-semibold', STATUS_STYLE[o.status] || 'bg-gray-100 text-gray-700']">{{ __(o.status) }}</span>
 										<span :class="['px-2 py-0.5 rounded-full text-xs font-semibold', PAYMENT_STYLE[o.payment_state] || 'bg-gray-100 text-gray-700']">{{ o.payment_text }}</span>
+										<span
+											v-if="o.online_fulfilment"
+											:class="['px-2 py-0.5 rounded-full text-xs font-semibold', o.online_fulfilment === 'Pickup' ? 'bg-purple-100 text-purple-800' : 'bg-cyan-100 text-cyan-800']"
+										>{{ __(o.online_fulfilment) }}</span>
 									</div>
 								</div>
 
@@ -104,7 +108,7 @@
 								</div>
 
 								<div v-if="o.online_delivery_note" class="rounded-md bg-gray-50 px-3 py-2 text-sm text-gray-700 whitespace-pre-line" dir="auto">
-									<span class="font-medium">{{ __("Delivery") }}:</span> {{ plain(o.online_delivery_note) }}
+									<span class="font-medium">{{ o.online_fulfilment === "Pickup" ? __("Pickup") : __("Delivery") }}:</span> {{ plain(o.online_delivery_note) }}
 								</div>
 
 								<div class="text-sm divide-y divide-gray-100">
@@ -177,47 +181,14 @@
 		</template>
 	</Dialog>
 
-	<!-- An item's details: to find it on the shelf -->
-	<Dialog v-model="itemDialog.show" :options="{ title: itemDialog.item?.item_name || __('Item'), size: 'lg' }">
-		<template #body-content>
-			<div v-if="itemDialog.loading" class="py-10 text-center text-gray-500">{{ __("Loading…") }}</div>
-			<div v-else-if="itemDialog.item" class="flex flex-col sm:flex-row gap-4">
-				<div class="w-full sm:w-48 h-48 flex-shrink-0 rounded-lg bg-gray-100 overflow-hidden flex items-center justify-center">
-					<img v-if="itemDialog.item.image" :src="itemDialog.item.image" :alt="itemDialog.item.item_name" class="w-full h-full object-cover" />
-					<FeatherIcon v-else name="image" class="w-10 h-10 text-gray-300" />
-				</div>
-				<div class="flex-1 min-w-0 text-sm">
-					<dl class="grid grid-cols-[auto,1fr] gap-x-4 gap-y-1.5">
-						<dt class="text-gray-500">{{ __("Item Code") }}</dt><dd class="font-mono font-semibold break-all">{{ itemDialog.item.item_code }}</dd>
-						<template v-if="itemDialog.item.barcodes.length">
-							<dt class="text-gray-500">{{ __("Barcode") }}</dt><dd class="font-mono break-all">{{ itemDialog.item.barcodes.join(", ") }}</dd>
-						</template>
-						<dt class="text-gray-500">{{ __("Group") }}</dt><dd>{{ itemDialog.item.item_group }}</dd>
-						<template v-if="itemDialog.item.brand">
-							<dt class="text-gray-500">{{ __("Brand") }}</dt><dd>{{ itemDialog.item.brand }}</dd>
-						</template>
-						<dt class="text-gray-500">{{ __("Unit") }}</dt><dd>{{ itemDialog.item.uom }}</dd>
-						<template v-if="itemDialog.item.price">
-							<dt class="text-gray-500">{{ __("Price") }}</dt><dd class="font-semibold">{{ money(itemDialog.item.price, itemDialog.item.currency) }}</dd>
-						</template>
-					</dl>
-					<p v-if="itemDialog.item.description" class="mt-3 text-gray-600" dir="auto">{{ itemDialog.item.description }}</p>
-					<div v-if="itemDialog.item.is_stock_item" class="mt-4">
-						<div class="font-medium text-gray-900 mb-1">{{ __("In stock") }}</div>
-						<div v-if="!itemDialog.item.stock.length" class="text-red-600">{{ __("None in any warehouse") }}</div>
-						<div
-							v-for="s in itemDialog.item.stock"
-							:key="s.warehouse"
-							:class="['flex justify-between gap-3 rounded px-2 py-1', s.warehouse === itemDialog.item.shop_warehouse ? 'bg-cyan-50 font-semibold' : '']"
-						>
-							<span class="min-w-0 break-words">{{ s.warehouse }}<span v-if="s.warehouse === itemDialog.item.shop_warehouse" class="text-xs text-cyan-700"> · {{ __("online shop") }}</span></span>
-							<span class="tabular-nums flex-shrink-0 text-end">{{ qty(s.qty) }}<span v-if="s.reserved" class="text-xs text-gray-500"> ({{ __("{0} reserved", [qty(s.reserved)]) }})</span></span>
-						</div>
-					</div>
-				</div>
-			</div>
-		</template>
-	</Dialog>
+	<!-- An item's details: to find it on the shelf (the online shop's warehouse pointed out) -->
+	<ItemDetailsDialog
+		v-model="itemDialog.show"
+		:item-code="itemDialog.code"
+		:pos-profile="posProfile"
+		:highlight-warehouse="shopWarehouse"
+		:highlight-label="__('online shop')"
+	/>
 </template>
 
 <script setup>
@@ -225,11 +196,13 @@ import { useToast } from "@/composables/useToast"
 import { call } from "@/utils/apiWrapper"
 import { DEFAULT_CURRENCY, formatCurrency as formatCurrencyUtil } from "@/utils/currency"
 import { Button, Dialog, FeatherIcon } from "frappe-ui"
+import ItemDetailsDialog from "./ItemDetailsDialog.vue"
 import { reactive, ref, watch } from "vue"
 
 const props = defineProps({
 	modelValue: Boolean,
 	currency: { type: String, default: DEFAULT_CURRENCY },
+	posProfile: String,
 })
 const emit = defineEmits(["update:modelValue"])
 const { showSuccess, showError } = useToast()
@@ -271,7 +244,8 @@ const loading = ref(false)
 const busy = ref(null)
 const completing = reactive({ show: false, order: null, mode: "" })
 const cancelling = reactive({ show: false, order: null })
-const itemDialog = reactive({ show: false, loading: false, item: null })
+const itemDialog = reactive({ show: false, code: null })
+const shopWarehouse = ref(null)
 
 watch(() => props.modelValue, (value) => (show.value = value))
 watch(show, (value) => {
@@ -329,6 +303,7 @@ async function loadModes() {
 	try {
 		const result = await call(`${API}.available`)
 		modes.value = result.modes || []
+		shopWarehouse.value = result.warehouse || null
 	} catch (error) {
 		modes.value = []
 	}
@@ -389,18 +364,9 @@ async function cancel() {
 	if (done) cancelling.show = false
 }
 
-async function openItem(itemCode) {
+function openItem(itemCode) {
 	if (!itemCode) return
-	itemDialog.item = null
-	itemDialog.loading = true
+	itemDialog.code = itemCode
 	itemDialog.show = true
-	try {
-		itemDialog.item = await call(`${API}.item_details`, { item_code: itemCode })
-	} catch (error) {
-		itemDialog.show = false
-		showError(error?.message || __("The item couldn't be loaded."))
-	} finally {
-		itemDialog.loading = false
-	}
 }
 </script>

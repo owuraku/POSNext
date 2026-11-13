@@ -1104,9 +1104,13 @@
 						]"
 					>
 						<div class="flex gap-2">
-							<!-- Item Image Thumbnail -->
-							<div
-								class="w-10 h-10 sm:w-12 sm:h-12 bg-gray-50 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-200"
+							<!-- Item Image Thumbnail: tapped, the item's details (code, stock…); the rest of the line edits it -->
+							<button
+								type="button"
+								@click.stop="openItemDetails(item)"
+								class="relative w-10 h-10 sm:w-12 sm:h-12 bg-gray-50 rounded-lg flex-shrink-0 flex items-center justify-center overflow-hidden border border-gray-200 hover:border-cyan-400"
+								:title="__('Item details')"
+								:aria-label="__('Item details: {0}', [item.item_name])"
 							>
 								<img
 									v-if="item.image"
@@ -1119,7 +1123,10 @@
 									class="w-full h-full object-cover"
 								/>
 								<FeatherIcon v-else name="image" class="h-5 w-5 text-gray-400" />
-							</div>
+								<span class="absolute bottom-0 end-0 w-4 h-4 rounded-tl bg-cyan-600 text-white flex items-center justify-center">
+									<FeatherIcon name="info" class="w-3 h-3" />
+								</span>
+							</button>
 
 							<div class="flex-1 min-w-0">
 								<!-- Name and line total; the total wraps under the name below 1100px -->
@@ -1513,6 +1520,12 @@
 		</div>
 
 		<!-- Edit Item Dialog -->
+		<ItemDetailsDialog
+			v-model="itemDetails.show"
+			:item-code="itemDetails.code"
+			:pos-profile="posProfile"
+		/>
+
 		<EditItemDialog
 			v-model="showEditDialog"
 			:item="selectedItem"
@@ -1547,8 +1560,9 @@ import { FeatherIcon } from "frappe-ui";
 
 const log = logger.create("InvoiceCart");
 import { createResource } from "frappe-ui";
-import { computed, onBeforeUnmount, onMounted, ref, watch, nextTick } from "vue";
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch, nextTick } from "vue";
 import EditItemDialog from "./EditItemDialog.vue";
+import ItemDetailsDialog from "./ItemDetailsDialog.vue";
 import {
 	getDisplayQuantity as getDisplayQuantityForLine,
 	resolvePaidQuantityFromDisplay as resolvePaidQtyForLine,
@@ -2492,6 +2506,13 @@ async function selectUom(item, newUom) {
  *
  * @param {Object} item - Cart item to edit
  */
+// An item's details (picture, code, barcodes, stock by warehouse), from its picture in the cart
+const itemDetails = reactive({ show: false, code: null });
+function openItemDetails(item) {
+	itemDetails.code = item.item_code;
+	itemDetails.show = true;
+}
+
 function openEditDialog(item) {
 	// Free / GWP / promo gift rows are promotion-owned — cashier must not
 	// change qty or rate (would oversell free stock beyond the offer).

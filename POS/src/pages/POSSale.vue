@@ -771,6 +771,7 @@
 				v-if="shiftStore.onlineOrders"
 				v-model="showOnlineOrdersDialog"
 				:currency="shiftStore.profileCurrency"
+				:pos-profile="shiftStore.profileName"
 			/>
 
 			<ShiftHistoryDialog
