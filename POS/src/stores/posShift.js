@@ -33,6 +33,8 @@ export const usePOSShiftStore = defineStore("posShift", () => {
 	const allowPosExpense = computed(
 		() => externalExpense.value || Number(currentProfile.value?.posa_allow_pos_expense || 0) === 1,
 	);
+	// The site's online shop (the Online Shop app): its orders can be seen and moved along from the till
+	const onlineOrders = computed(() => Number(currentProfile.value?.posa_online_orders || 0) === 1);
 	const maximumExpenseAmount = computed(
 		() => Number.parseFloat(currentProfile.value?.posa_maximum_expense_amount) || 0,
 	);
@@ -122,6 +124,7 @@ export const usePOSShiftStore = defineStore("posShift", () => {
 		writeOffLimit,
 		allowPosExpense,
 		externalExpense,
+		onlineOrders,
 		maximumExpenseAmount,
 
 		// Actions

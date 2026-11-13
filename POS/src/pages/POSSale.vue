@@ -155,6 +155,26 @@
 						</span>
 					</button>
 					<button
+						v-if="shiftStore.onlineOrders"
+						@click="showOnlineOrdersDialog = true"
+						class="w-full text-start px-4 py-2.5 text-sm text-gray-700 hover:bg-cyan-50 flex items-center gap-3 transition-colors"
+					>
+						<svg
+							class="w-5 h-5 text-cyan-600"
+							fill="none"
+							stroke="currentColor"
+							viewBox="0 0 24 24"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								stroke-width="2"
+								d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
+							/>
+						</svg>
+						<span>{{ __("Online Orders") }}</span>
+					</button>
+					<button
 						v-if="canRecordPosExpense"
 						@click="openExpenseDialog"
 						class="w-full text-start px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 flex items-center gap-3 transition-colors"
@@ -509,6 +529,8 @@
 								:allow-pos-expense="canRecordPosExpense"
 								@close-shift="handleCloseShift"
 								@show-shift-history="navigateToShiftHistory"
+								:online-orders="shiftStore.onlineOrders"
+								@show-online-orders="showOnlineOrdersDialog = true"
 							/>
 						</div>
 					</keep-alive>
@@ -745,6 +767,12 @@
 			/>
 
 			<!-- Shift History Dialog -->
+			<OnlineOrdersDialog
+				v-if="shiftStore.onlineOrders"
+				v-model="showOnlineOrdersDialog"
+				:currency="shiftStore.profileCurrency"
+			/>
+
 			<ShiftHistoryDialog
 				v-model="showShiftHistoryDialog"
 				:pos-profile="shiftStore.profileName"
@@ -1173,6 +1201,7 @@ import DraftInvoicesDialog from "@/components/sale/DraftInvoicesDialog.vue";
 import InvoiceCart from "@/components/sale/InvoiceCart.vue";
 import InvoiceHistoryDialog from "@/components/sale/InvoiceHistoryDialog.vue";
 import ShiftHistoryDialog from "@/components/sale/ShiftHistoryDialog.vue";
+import OnlineOrdersDialog from "@/components/sale/OnlineOrdersDialog.vue";
 import ItemSelectionDialog from "@/components/sale/ItemSelectionDialog.vue";
 import ItemsSelector from "@/components/sale/ItemsSelector.vue";
 import OffersDialog from "@/components/sale/OffersDialog.vue";
@@ -1382,6 +1411,7 @@ const invoiceHistoryData = ref([]);
 
 // Shift History dialog
 const showShiftHistoryDialog = ref(false);
+const showOnlineOrdersDialog = ref(false);
 
 // Stock sync status
 const isStockSyncActive = ref(false);
