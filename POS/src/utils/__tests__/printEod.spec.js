@@ -11,7 +11,16 @@ function loadFramesWhenAdded() {
 	const observer = new MutationObserver((records) => {
 		for (const record of records) {
 			for (const node of record.addedNodes) {
-				if (node.tagName === "IFRAME") setTimeout(() => node.onload?.(), 0)
+				if (node.tagName === "IFRAME") {
+					// The report's page, as Frappe's /printview renders it (or its error page, when a test says so)
+					const page = document.implementation.createHTMLDocument("print")
+					if (globalThis.__printError) page.body.textContent = globalThis.__printError
+					else page.body.innerHTML = '<div class="print-format">EOD</div>'
+					Object.defineProperty(node, "contentWindow", {
+						value: { document: page, addEventListener: () => {} },
+					})
+					setTimeout(() => node.onload?.(), 0)
+				}
 			}
 		}
 	})
@@ -26,7 +35,10 @@ describe("printEODReport", () => {
 		printOnReceiptPage.mockReset()
 		observer = loadFramesWhenAdded()
 	})
-	afterEach(() => observer.disconnect())
+	afterEach(() => {
+		observer.disconnect()
+		globalThis.__printError = null
+	})
 
 	it("prints in the browser, not through QZ Tray, when Silent Print is off", async () => {
 		const { printEODReport } = await import("@/utils/printEod")
@@ -52,5 +64,12 @@ describe("printEODReport", () => {
 		const { printEODReport } = await import("@/utils/printEod")
 		await expect(printEODReport("POS-CLO-0003", { silent: true })).resolves.toBe("browser")
 		expect(printOnReceiptPage).toHaveBeenCalledTimes(1)
+	})
+
+	it("doesn't print Frappe's error page as the report", async () => {
+		globalThis.__printError = "Print Format POS Next EOD Report not found"
+		const { printEODReport } = await import("@/utils/printEod")
+		await expect(printEODReport("POS-CLO-0004")).rejects.toThrow("not found")
+		expect(printOnReceiptPage).not.toHaveBeenCalled()
 	})
 })

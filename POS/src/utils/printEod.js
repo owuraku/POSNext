@@ -23,8 +23,10 @@ export function browserPrintDoc(doctype, name, printFormat) {
 		})
 		const frame = document.createElement("iframe")
 		frame.setAttribute("aria-hidden", "true")
+		// Off screen but full size: the report is laid out (and its page length measured) as in the receipt
+		// window's 800 x 600, not squeezed to nothing
 		frame.style.cssText =
-			"position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden"
+			"position:fixed;left:-10000px;top:0;width:800px;height:600px;border:0;opacity:0;pointer-events:none"
 		const remove = () => setTimeout(() => frame.remove(), 1000)
 		const timer = setTimeout(() => {
 			remove()
@@ -34,6 +36,17 @@ export function browserPrintDoc(doctype, name, printFormat) {
 			clearTimeout(timer)
 			try {
 				const win = frame.contentWindow
+				// Frappe's error page (no such format, no permission) loads too: not printed as the report
+				if (!win.document.querySelector(".print-format")) {
+					const message = (
+						win.document.body?.innerText ||
+						win.document.body?.textContent ||
+						""
+					)
+						.trim()
+						.slice(0, 200)
+					throw new Error(message || "The report could not be shown")
+				}
 				try {
 					await win.document.fonts?.ready
 				} catch (error) {
