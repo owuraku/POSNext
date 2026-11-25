@@ -1374,7 +1374,8 @@ async function submitClosing() {
 		const closingShiftName = result?.name ?? submitResource.data?.name;
 		if (closingShiftName) {
 			try {
-				await printEODReport(closingShiftName);
+				// Through QZ Tray only when Silent Print is on (else, or if it fails, the browser's print dialog)
+				await printEODReport(closingShiftName, { silent: posSettingsStore.silentPrint });
 				eodPrintFailed.value = null;
 			} catch (err) {
 				console.warn("[eod] print failed", err);
@@ -1409,13 +1410,13 @@ async function retryEodPrint() {
 
 	retryPrintLoading.value = true;
 	try {
-		await printEODReport(closingShiftName);
+		const how = await printEODReport(closingShiftName, { silent: posSettingsStore.silentPrint });
 		eodPrintFailed.value = null;
-		showSuccess(__("EOD report printed successfully"));
+		showSuccess(how === "silent" ? __("EOD report printed successfully") : __("EOD report sent to the print dialog"));
 		closeDialog();
 	} catch (err) {
 		console.warn("[eod] retry print failed", err);
-		showWarning(__("EOD report did not print. Please check QZ Tray and retry."));
+		showWarning(__("EOD report did not print. Please check the printer and retry."));
 	} finally {
 		retryPrintLoading.value = false;
 	}
